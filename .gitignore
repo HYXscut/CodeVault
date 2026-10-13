@@ -1,0 +1,20 @@
+# 本地构建中间产物与生成目录
+/build/
+/build-*/
+/run/
+/work/
+
+# 本地编译器工具链与运行时数据（不提交大体积工具链与用户数据）
+/toolchain/
+/data/
+
+# 练习生成的二进制文件
+/examples/*.exe
+/examples/*.o
+/examples/*.obj
+
+# IDE 本地私有配置文件
+*.user
+.qtcreator/
+.vscode/
+.idea/
