@@ -3,19 +3,19 @@
 #include<vector>
 #include<string>
 struct Problem {
-	std::string packageId;//Ìâ°ü±àºÅ
-	std::string problemId;//Ìâ°üÄÚÌâÄ¿±àºÅ
-	std::string title;//ÌâÄ¿±êÌâ
-	std::vector<std::string> tags;//¿¼µã±êÇ©
-	std::string statement;//ÍêÕûÌâÄ¿ÄÚÈİ
-	int timeLimitMs = 1000;//²âÊÔµãÊ±ÏŞ£¨µ¥Î»ºÁÃë£©
-	int testCount = 0;//²âÊÔµã¸öÊı
-	std::string problemDir;//Ó¦ÓÃÖĞ±£´æµÄÌâÄ¿¸±±¾¾ø¶ÔÄ¿Â¼
+	std::string packageId;//é¢˜åŒ…ç¼–å·
+	std::string problemId;//é¢˜åŒ…å†…é¢˜ç›®ç¼–å·
+	std::string title;//é¢˜ç›®æ ‡é¢˜
+	std::vector<std::string> tags;//è€ƒç‚¹æ ‡ç­¾
+	std::string statement;//å®Œæ•´é¢˜ç›®å†…å®¹
+	int timeLimitMs = 1000;//æµ‹è¯•ç‚¹æ—¶é™ï¼ˆå•ä½æ¯«ç§’ï¼‰
+	int testCount = 0;//æµ‹è¯•ç‚¹ä¸ªæ•°
+	std::string problemDir;//åº”ç”¨ä¸­ä¿å­˜çš„é¢˜ç›®å‰¯æœ¬ç»å¯¹ç›®å½•
 };
 struct CompilerInfo
 {
-    bool found = false;  // ÊÇ·ñ³É¹¦È¡µÃ±àÒëÆ÷°æ±¾
-    std::string version; // ³É¹¦Ê±µÄÊµ¼Ê°æ±¾ÎÄ×Ö
-    std::string error;   // Ê§°ÜÊ±µÄÔ­Òò
+    bool found = false;  // æ˜¯å¦æˆåŠŸå–å¾—ç¼–è¯‘å™¨ç‰ˆæœ¬
+    std::string version; // æˆåŠŸæ—¶çš„å®é™…ç‰ˆæœ¬æ–‡å­—
+    std::string error;   // å¤±è´¥æ—¶çš„åŸå› 
 };
 #endif

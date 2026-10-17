@@ -18,6 +18,9 @@ namespace
 
 std::string pathToUtf8(const fs::path& path)
 {
+// 该函数用于将文件系统路径转为用于错误信息和 Problem::problemDir 的 UTF-8 字符串。
+// 参数 path：待转换的路径；返回值：UTF-8 编码的路径文本。
+// 实现：取得 u8string()；在 char8_t 可用时逐字符转为 std::string，可以兼容 C++17 和 C++20 对 u8string() 返回类型的差异。
 #if defined(__cpp_char8_t)
     const auto text = path.u8string();
     return std::string(text.begin(), text.end());
@@ -28,6 +31,9 @@ std::string pathToUtf8(const fs::path& path)
 
 void removeUtf8Bom(std::string& text)
 {
+// 该函数用于删除文本开头可选的 UTF-8 BOM。
+// 参数 text：输入兼输出的文本；不足三个字节或没有 BOM 时保持原样。
+// 实现：比较开头三个字节是否依次为 EF BB BF，匹配后删除这三个字节。
     if (text.size() >= 3 &&
         static_cast<unsigned char>(text[0]) == 0xEF &&
         static_cast<unsigned char>(text[1]) == 0xBB &&
@@ -42,6 +48,10 @@ bool readLines(
     std::vector<std::string>& lines,
     std::string& error)
 {
+// 该函数用于按行读取题包元数据文件。
+// 参数 filePath：文件路径；lines：成功时接收所有行；error：接收错误原因。
+// 返回值：完整读取返回 true，否则返回 false；失败时不替换 lines。
+// 实现：以二进制方式打开文件，逐行读取；去掉 CRLF 留下的 '\r'；检查读取错误，移除首行 BOM，最后才将临时行集合交给 lines。
     std::ifstream input(filePath, std::ios::binary);
 
     if (!input)
@@ -68,14 +78,14 @@ bool readLines(
     {
         error = "读取文件失败：" + pathToUtf8(filePath);
         return false;
-    }
+    }// bad() 表示底层读取出错；正常读到文件末尾不算读取失败。
 
     if (!newLines.empty())
     {
         removeUtf8Bom(newLines[0]);
     }
 
-    lines = std::move(newLines);
+    lines = std::move(newLines);// 文件完整读取成功后才替换输出参数，失败时不会留下部分行。
     error.clear();
     return true;
 }
@@ -85,6 +95,10 @@ bool readTextFile(
     std::string& text,
     std::string& error)
 {
+// 该函数用于完整读取题面文件。
+// 参数 filePath：题面路径；text：成功时接收题面；error：接收错误原因。
+// 返回值：完整读取返回 true，否则返回 false；失败时不替换 text。
+// 实现：将文件缓冲区写入字符串流；确认读取成功后移除开头的 UTF-8 BOM，最后才把临时文本交给 text。
     std::ifstream input(filePath, std::ios::binary);
 
     if (!input)
@@ -100,12 +114,12 @@ bool readTextFile(
     {
         error = "读取题面文件失败：" + pathToUtf8(filePath);
         return false;
-    }
+    }// bad() 用于区分实际读取错误与正常到达文件末尾。
 
     std::string newText = buffer.str();
     removeUtf8Bom(newText);
 
-    text = std::move(newText);
+    text = std::move(newText);// 完整读取并处理 BOM 后才将题面交给输出参数。
     error.clear();
     return true;
 }
@@ -116,6 +130,11 @@ bool parseInteger(
     int maxValue,
     int& result)
 {
+// 该函数用于解析并检查指定范围内的十进制整数。
+// 参数 text：待解析文本；minValue/maxValue：允许范围的两端；
+// result：成功时接收解析值，失败时保持原值。
+// 返回值：文本完整表示一个范围内的整数时返回 true，否则返回 false。
+// 实现：from_chars() 不跳过空白；同时检查转换错误、是否读到文本末尾以及数值范围，全部通过后才写入 result。
     if (text.empty())
     {
         return false;// 空字符串不是有效整数
@@ -133,7 +152,7 @@ bool parseInteger(
         conversion.ptr != end)
     {
         return false;
-    }
+    }// 除转换成功外，还要求读完全部字符，拒绝带有多余字符的整数。
 
     if (value < minValue || value > maxValue)
     {
@@ -146,6 +165,9 @@ bool parseInteger(
 
 bool isValidId(const std::string& id)
 {
+// 该函数用于检查题包或题目编号是否符合命名规则。
+// 参数 id：待检查的编号；返回值：合法返回 true，否则返回 false。
+// 实现：拒绝空串，再逐字符检查；只允许英文字母、数字、下划线和连字符。
     if (id.empty())
     {
         return false;
@@ -176,6 +198,10 @@ bool splitTags(
     const std::string& text,
     std::vector<std::string>& tags)
 {
+// 该函数用于将分号分隔的标签字段拆成标签列表。
+// 参数 text：原始标签字段；tags：成功时接收标签，失败时保持原值。
+// 返回值：格式合法返回 true，否则返回 false。
+// 实现：空字段表示没有标签；非空字段按分号逐段提取，若产生空标签（例如连续分号或结尾分号）则拒绝。
     std::vector<std::string> newTags;
 
     if (text.empty())
@@ -212,7 +238,7 @@ bool splitTags(
         start = separator + 1;
     }
 
-    tags = std::move(newTags);
+    tags = std::move(newTags);// 所有标签都通过检查后，才替换调用者原有的标签列表。
     return true;
 }
 
@@ -220,6 +246,10 @@ bool isDirectory(
     const fs::path& path,
     std::string& error)
 {
+// 该函数用于确认路径存在且为目录。
+// 参数 path：待检查路径；error：失败时接收文件系统错误或路径错误。
+// 返回值：是目录返回 true，否则返回 false。
+// 实现：使用带 error_code 的文件系统接口，分别处理检查失败与类型不符。
     std::error_code ec;
     const bool result = fs::is_directory(path, ec);
 
@@ -246,6 +276,10 @@ bool checkReadableFile(
     const fs::path& filePath,
     std::string& error)
 {
+// 该函数用于确认一个测试输入或输出文件存在、是普通文件且可读。
+// 参数 filePath：测试文件路径；error：失败时接收原因。
+// 返回值：检查通过返回 true，否则返回 false。
+// 实现：先检查文件类型，再以二进制方式打开并尝试读取；文件为空是合法情况，因此不把到达文件末尾视为错误。
     std::error_code ec;
     const bool regularFile =
         fs::is_regular_file(filePath, ec);
@@ -292,6 +326,10 @@ bool preparePackagesDirectory(
     const fs::path& packagesPath,
     std::string& error)
 {
+// 该函数用于准备应用保存题包副本的目录。
+// 参数 packagesPath：保存目录路径；error：失败时接收原因。
+// 返回值：最终路径是可访问的目录时返回 true，否则返回 false。
+// 实现：先判断路径是否存在；不存在则递归创建；最后确认它确实是目录。
     std::error_code ec;
 
     const bool exists =
@@ -341,6 +379,11 @@ bool checkNoExtraTestFiles(
     int testCount,
     std::string& error)
 {
+// 该函数用于检查题目目录中是否有多余或编号错误的测试文件。
+// 参数 problemFolder：题目目录；testCount：允许的测试点编号上限；error：失败时接收原因。
+// 返回值：检查通过返回 true，否则返回 false。
+// 实现：遍历目录中的普通文件，只检查 .in 和 .out 文件；文件名主体必须是 1 到 testCount 的规范十进制编号。
+// 其他扩展名的文件及子目录不在本函数的检查范围内。
     std::error_code ec;
 
     for (fs::directory_iterator iterator(problemFolder, ec);
@@ -394,7 +437,7 @@ bool checkNoExtraTestFiles(
             error = "存在多余或编号错误的测试文件：" +
                     pathToUtf8(entry.path());
             return false;
-        }
+        }// 文件名主体必须能解析为 1 到 testCount 之间的编号。
 
         const std::string expectedName =
             std::to_string(testIndex) + extension;
@@ -404,7 +447,7 @@ bool checkNoExtraTestFiles(
             error = "测试文件编号格式错误：" +
                     pathToUtf8(entry.path());
             return false;
-        }
+        }// 比较规范文件名，拒绝 01.in 等数值有效但命名格式不符的文件。
     }
 
     if (ec)
@@ -424,6 +467,10 @@ bool parsePackageFolder(
     std::vector<Problem>& parsedProblems,
     std::string& error)
 {
+// 该函数用于验证并解析一个完整题包。
+// 参数 packageFolder：题包根目录；parsedPackageId：成功时接收题包编号；parsedProblems：成功时接收全部题目；error：失败时接收原因。
+// 返回值：元数据、题面及测试文件全部符合要求时返回 true，否则返回 false。
+// 步骤：验证目录和 package.txt；检查格式标识、编号与题目数量；按每题五行解析元数据；检查题目目录、题面和测试文件；计算题目目录绝对路径；全部成功后才提交两个输出参数。
     if (!isDirectory(packageFolder, error))
     {
         return false;
@@ -482,7 +529,7 @@ bool parsePackageFolder(
     }
 
     const std::size_t expectedLineCount =
-        4 + static_cast<std::size_t>(problemCount) * 5;
+        4 + static_cast<std::size_t>(problemCount) * 5;// 文件头占四行，每道题占五行，据此计算 package.txt 应有的总行数。
 
     if (lines.size() != expectedLineCount)
     {
@@ -497,7 +544,7 @@ bool parsePackageFolder(
     for (int index = 0; index < problemCount; ++index)
     {
         const std::size_t offset =
-            4 + static_cast<std::size_t>(index) * 5;
+            4 + static_cast<std::size_t>(index) * 5;// 前四行是题包信息；每道题占五行，offset 指向当前题目的第一行。
 
         Problem problem;
 
@@ -524,7 +571,7 @@ bool parsePackageFolder(
             error = "同一题包中的题目编号重复：" +
                     problem.problemId;
             return false;
-        }
+        }// set::insert 的 second 为 false 时，说明该题目编号已经出现过。
 
         if (!splitTags(
                 lines[offset + 2],
@@ -600,7 +647,7 @@ bool parsePackageFolder(
             {
                 return false;
             }
-        }
+        }// 从 1 到 testCount 逐一检查每组输入、输出文件是否存在且可读。
 
         if (!checkNoExtraTestFiles(
                 problemFolder,
@@ -623,13 +670,13 @@ bool parsePackageFolder(
 
         problem.problemDir =
             pathToUtf8(
-                absoluteProblemFolder.lexically_normal());
+                absoluteProblemFolder.lexically_normal());// 保存规范化后的绝对路径，供后续访问该题目的测试文件。
 
         newProblems.push_back(std::move(problem));
     }
 
     parsedPackageId = packageId;
-    parsedProblems = std::move(newProblems);
+    parsedProblems = std::move(newProblems);// 保存规范化后的绝对路径，供后续访问该题目的测试文件。
     error.clear();
     return true;
 }
@@ -639,10 +686,17 @@ bool parsePackageFolder(
 ProblemLibrary::ProblemLibrary(std::string packagesDir)
     : packagesDir_(std::move(packagesDir))
 {
+// 初始化题库的保存目录。
+// 参数 packagesDir：应用保存题包副本的目录路径。
+// 实现：使用 std::move() 初始化 packagesDir_，避免不必要的字符串复制；problems_ 保持为空，loaded_ 保持默认值 false。
 }
 
 bool ProblemLibrary::load(std::string& error)
 {
+// 从应用保存目录重新建立题库。
+// 参数 error：失败时输出原因，成功时清空。
+// 返回值：全部正式题包加载成功返回 true，否则返回 false。
+// 步骤：准备目录；收集正式题包目录并排序；逐个解析并检查编号；将题目先放入局部集合，全部通过后才替换 problems_。
     const fs::path packagesPath =
         fs::u8path(packagesDir_);
 
@@ -710,7 +764,7 @@ bool ProblemLibrary::load(std::string& error)
         {
             return pathToUtf8(left.filename()) <
                    pathToUtf8(right.filename());
-        });
+        });// 按目录名排序，使多次加载得到稳定的题目顺序。
 
     std::vector<Problem> loadedProblems;
     std::set<std::string> loadedPackageIds;
@@ -760,6 +814,10 @@ bool ProblemLibrary::importPackage(
     std::string folder,
     std::string& error)
 {
+// 将外部题包复制到应用目录并加入当前题库。
+// 参数 folder：外部题包根目录；error：失败时输出原因，成功时清空。
+// 返回值：复制、验证和题库更新全部成功返回 true，否则返回 false。
+// 步骤：检查加载状态；验证源题包及编号；选择临时目录并复制；验证副本；重命名到正式目录；重新解析最终位置；更新题目集合。
     if (!loaded_)
     {
         error = "题库尚未成功加载，不能导入题包";
@@ -861,7 +919,7 @@ bool ProblemLibrary::importPackage(
         sourceFolder,
         temporaryFolder,
         fs::copy_options::recursive,
-        ec);
+        ec);// 先递归复制到临时目录，复制完成前不占用正式题包目录。
 
     if (ec)
     {
@@ -906,7 +964,7 @@ bool ProblemLibrary::importPackage(
     fs::rename(
         temporaryFolder,
         destinationFolder,
-        ec);
+        ec);// 将验证通过的临时目录改名为正式题包目录。
 
     if (ec)
     {
@@ -945,7 +1003,7 @@ bool ProblemLibrary::importPackage(
         savedProblems.begin(),
         savedProblems.end());
 
-    problems_ = std::move(updatedProblems);
+    problems_ = std::move(updatedProblems);// 文件保存和最终解析均成功后，才更新内存中的题库。
 
     error.clear();
     return true;
@@ -953,6 +1011,9 @@ bool ProblemLibrary::importPackage(
 
 std::vector<Problem> ProblemLibrary::getProblems()
 {
+// 返回当前全部题目的副本。
+// 参数：无；返回值：题目 vector 的副本。
+// 实现：直接返回 problems_，由 vector 的复制操作构造返回值。
     return problems_;
 }
 
@@ -962,12 +1023,16 @@ bool ProblemLibrary::findProblem(
     Problem& result,
     std::string& error)
 {
+// 按“题包编号 + 题目编号”定位一题。
+// 参数 packageId/problemId：目标的两个编号；result：成功时输出题目副本；error：失败时输出原因，成功时清空。
+// 返回值：找到返回 true，未找到返回 false。
+// 实现：顺序遍历题目集合；两个编号同时匹配时才写入 result。
     for (const Problem& problem : problems_)
     {
         if (problem.packageId == packageId &&
             problem.problemId == problemId)
         {
-            result = problem;
+            result = problem;// 只有两个编号同时匹配才修改 result；查找失败时保留其原值。
             error.clear();
             return true;
         }
