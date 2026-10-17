@@ -118,7 +118,7 @@ bool parseInteger(
 {
     if (text.empty())
     {
-        return false;
+        return false;// 空字符串不是有效整数
     }
 
     int value = 0;

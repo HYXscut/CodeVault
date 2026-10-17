@@ -29,9 +29,9 @@ class ProblemLibrary
     // 查找成功则error为空，result返回所查找的题目
 
     private:
-    std::string packagesDir; //应用保存题包副本的目录
-    std::vector<Problem> problems;//当前已经加载的全部题目
-    
+    std::string packagesDir_;
+    std::vector<Problem> problems_;
+    bool loaded_ = false;// 题库是否已成功加载
 
 };
 #endif
