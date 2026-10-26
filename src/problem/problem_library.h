@@ -51,6 +51,20 @@ public:
     // 返回值：找到题目返回 true，否则返回 false。
     // 实现：顺序遍历 problems_，同时比较两个编号；只有匹配后才赋值 result。
 
+bool getTestCase(
+    std::string packageId,
+    std::string problemId,
+    int testIndex,
+    TestCase& result,
+    std::string& error
+);
+// 功能：从应用保存的题目副本读取一个测试点的输入和标准输出；
+// 输入参数 packageId/problemId：用于找题。
+// 输出参数 成功时设置result.index、result.input和result.expectedOutput,并清空error；失败时返回 false，通过 error 写明原因，且不修改 result
+// 输入参数testIndex：测试点编号，第二周只接受 1；下周再扩展到1到testCount之间；若不在范围内则返回false
+// 返回值：全部检查和读取成功才返回true，否则返回false；失败不改变result
+// 实现：先调用已有的 findProblem 找题、检查编号和testCount并读取1.in、1.out，确认两个都成功后才赋值
+
 private:
     std::string packagesDir_;
     // 应用保存题包副本的目录路径。
