@@ -18,3 +18,7 @@
 .qtcreator/
 .vscode/
 .idea/
+# Visual Studio and Qt Creator local state
+.vs/
+/ui/build/
+
