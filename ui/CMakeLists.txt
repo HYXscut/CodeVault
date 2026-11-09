@@ -21,6 +21,10 @@ set(PROJECT_SOURCES
     ../src/problem/problem_library.h
     ../src/compiler/compiler_checker.cpp
     ../src/compiler/compiler_checker.h
+    ../src/judge/judge_engine.cpp
+    ../src/judge/judge_engine.h
+    ../src/judge/output_judge.cpp
+    ../src/judge/output_judge.h
 )
 
 qt_add_executable(CodeVaultUI
