@@ -9,6 +9,8 @@
 #include <QVBoxLayout>
 #include <QTableWidgetItem> // 使用表格单元格对象
 #include <QFileDialog>//提供选择文件夹的对话框
+#include <QFileInfo> // 检查文件信息
+#include <QCloseEvent> //提供关闭事件的定义
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -17,9 +19,16 @@ MainWindow::MainWindow(QWidget *parent)
     library_(nullptr),
     checker_(nullptr),
     statementText_(nullptr),
-    checkCompilerButton_(nullptr)
+    checkCompilerButton_(nullptr),
+    judgeEngine_(nullptr),
+    hasSelectedProblem_(false)
 {
     ui->setupUi(this);
+    ui->checkCompilerButton->setFixedSize(140, 30);
+    ui->sourcePathEdit->setReadOnly(true);
+    ui->actualOutputText->setReadOnly(true);
+    ui->expectedOutputText->setReadOnly(true);
+    ui->errorOutputText->setReadOnly(true);
     ui->statusLabel->setText(QStringLiteral("Qt 界面工程已加载，等待连接业务功能"));
 
     QString appDir=QCoreApplication::applicationDirPath();//获得所在目录的绝对路径
@@ -31,6 +40,8 @@ MainWindow::MainWindow(QWidget *parent)
     library_=new ProblemLibrary(packagesDir.toStdString());
 
     checker_=new CompilerChecker(compilerPath.toStdString(),this);
+
+    judgeEngine_=new JudgeEngine(compilerPath.toStdString(),this);
 
     ui->statusLabel->setText(QStringLiteral("程序初始化完成"));
 
@@ -44,6 +55,12 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->checkCompilerButton,&QPushButton::clicked,this,&MainWindow::checkCompiler);
 
     connect(checker_,&CompilerChecker::checkFinished,this,&MainWindow::onCompilerCheckFinished);
+
+    connect(ui->chooseSourceButton,&QPushButton::clicked,this,&MainWindow::chooseSource);
+
+    connect(ui->judgeButton,&QPushButton::clicked,this,&MainWindow::startJudge);
+
+    connect(judgeEngine_,&JudgeEngine::judgeFinished,this,&MainWindow::onJudgeFinished);
 
     refreshProblems();
 }
@@ -188,8 +205,175 @@ void MainWindow::showSelectedProblems(int row,int column)//函数作用：点击
         return;
     }
 
+    currentProblem_=problem;
+    hasSelectedProblem_=true;
+    ui->judgeButton->setEnabled(!sourcePath_.isEmpty());
+
     //在题面区域显示题面
     ui->statementText->setPlainText(QString::fromUtf8(problem.statement.c_str()));
     //更新状态栏
     ui->statusLabel->setText(QStringLiteral("当前题目：%1").arg(QString::fromUtf8(problem.title.c_str())));
 }
+
+void MainWindow::checkCompiler()
+{
+    if(!checker_->checkCompiler()) // 调用 B 的接口，判断请求是否被接受
+    {
+        ui->statusLabel->setText(QStringLiteral("已有检查正在进行"));
+        return;
+    }
+    ui->checkCompilerButton->setEnabled(false);
+    ui->statusLabel->setText(QStringLiteral("正在检查编译器…"));
+}
+
+void MainWindow::onCompilerCheckFinished()
+{
+    const CompilerInfo info=checker_->getCompilerInfo();//读取本次检查结果
+
+    if(info.found)
+    {
+        //成功时显示版本
+        ui->statusLabel->setText(QString::fromUtf8(info.version.c_str()));
+    }
+    else
+    {
+        //失败时显示错误
+        ui->statusLabel->setText(QString::fromUtf8(info.error.c_str()));
+    }
+
+    ui->checkCompilerButton->setEnabled(true);//检查结束后恢复按钮
+}
+
+void MainWindow::chooseSource()
+{
+    const QString filePath=QFileDialog::getOpenFileName(this,QStringLiteral("选择C++源码"),QString(),QStringLiteral("C++源码(*.cpp)"));// 保存用户选择的文件路径
+    if(filePath.isEmpty())// 判断用户是否取消选择
+    {
+        return;
+    }
+    const QFileInfo fileInfo(filePath);
+
+    // 判断选择的路径是否为普通文件
+    if(!fileInfo.isFile())
+    {
+        ui->statusLabel->setText(QStringLiteral("选择的路径不是文件"));
+        return;
+    }
+
+    // 获取文件扩展名并进行比较
+    if(fileInfo.suffix().compare(QStringLiteral("cpp"),Qt::CaseInsensitive)!=0)
+    {
+        ui->statusLabel->setText(QStringLiteral("请选择.cpp源码文件"));
+        return;
+    }
+
+    sourcePath_=filePath;// 保存源码路径到窗口成员变量
+
+    ui->sourcePathEdit->setText(sourcePath_);
+
+    ui->statusLabel->setText(QStringLiteral("源码选择成功"));
+
+    ui->judgeButton->setEnabled(hasSelectedProblem_);
+}
+
+void MainWindow::startJudge()
+{
+    if(!hasSelectedProblem_)//检查是否已经选择题目
+    {
+        ui->statusLabel->setText(QStringLiteral("请先选择题目"));
+
+        return;
+    }
+
+    if(sourcePath_.isEmpty())//检查是否已经选择源码
+    {
+        ui->statusLabel->setText(QStringLiteral("请选择cpp源码"));
+
+        return;
+    }
+
+    TestCase testCase;
+    std::string error;
+
+    //保存测试点读取结果
+    const bool testLoaded=library_->getTestCase(currentProblem_.packageId,currentProblem_.problemId,1,testCase,error);
+
+    if(!testLoaded) //判断测试点是否读取失败
+    {
+        ui->statusLabel->setText(QString::fromUtf8(error.c_str()));
+        return;
+    }
+
+    std::vector<TestCase> tests;//创建测试点列表
+
+    tests.push_back(testCase);//将第一个测试点放入列表
+
+    const bool accepted=judgeEngine_->startJudge(currentProblem_,sourcePath_.toStdString(),tests,error);
+
+    if(!accepted) //判断判题请求是否被拒绝
+    {
+        ui->statusLabel->setText(QString::fromUtf8(error.c_str()));
+
+        return;
+    }
+
+    //禁止判题期间重复判题、重新选择源码、导入题包、刷新题库、检查编译器
+    ui->judgeButton->setEnabled(false);
+    ui->chooseSourceButton->setEnabled(false);
+    ui->importButton->setEnabled(false);
+    ui->refreshButton->setEnabled(false);
+    ui->checkCompilerButton->setEnabled(false);
+    ui->problemTable->setEnabled(false);
+}
+
+void MainWindow::onJudgeFinished()
+{
+    const JudgeResult result=judgeEngine_->getResult();
+
+    ui->resultLabel->setText(QString::fromUtf8(result.status.c_str()));
+
+    ui->actualOutputText->setPlainText(QString::fromUtf8(result.actualOutput.c_str()));
+
+    ui->expectedOutputText->setPlainText(QString::fromUtf8(result.expectedOutput.c_str()));
+
+    QString errorText=QString::fromUtf8(result.compilerOutput.c_str());
+
+    if(errorText.isEmpty())
+    {
+        errorText=QString::fromUtf8(result.error.c_str());
+    }
+
+    ui->errorOutputText->setPlainText(errorText);
+    ui->statusLabel->setText( // 更新状态栏
+        QStringLiteral("判题完成，耗时 %1 ms") // 设置耗时提示格式
+            .arg(result.elapsedMs)); // 填入实际耗时
+    // 恢复判题、源码选择、导入、刷新、编译器检查、切换按钮
+    ui->judgeButton->setEnabled(true);
+    ui->chooseSourceButton->setEnabled(true);
+    ui->importButton->setEnabled(true);
+    ui->refreshButton->setEnabled(true);
+    ui->checkCompilerButton->setEnabled(true);
+    ui->problemTable->setEnabled(true);
+
+}
+
+void MainWindow::closeEvent(QCloseEvent*event)
+{
+    if(judgeEngine_->isBusy())
+    {
+        //提示用户等待
+        ui->statusLabel->setText(QStringLiteral("判题进行中，请等待结束后再关闭"));
+
+        event->ignore();//拒绝本次关闭请求
+        return;
+    }
+    QMainWindow::closeEvent(event);
+}
+
+
+
+
+
+
+
+
