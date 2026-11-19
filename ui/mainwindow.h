@@ -7,6 +7,7 @@
 #include "problem/problem_library.h"
 #include "compiler/compiler_checker.h"
 #include "judge/judge_engine.h"
+#include "progress/progress_store.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -45,6 +46,9 @@ private:
     Problem currentProblem_;// 保存当前选中的题目
     QString sourcePath_; // 保存当前选择的源码路径
     bool hasSelectedProblem_; // 表示当前是否已经选择题目
+    ProgressStore* progressStore_;//保存进度存储对象
+    Progress currentProgress_; //保存当前题目的进度
+    QString userId_;//保存当前练习用户ID
 };
 
 #endif // MAINWINDOW_H

@@ -10,7 +10,7 @@
 #include <QTableWidgetItem> // 使用表格单元格对象
 #include <QFileDialog>//提供选择文件夹的对话框
 #include <QFileInfo> // 检查文件信息
-#include <QCloseEvent> //提供关闭事件的定义
+#include <QCloseEvent> // 提供关闭事件的定义
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -21,7 +21,9 @@ MainWindow::MainWindow(QWidget *parent)
     statementText_(nullptr),
     checkCompilerButton_(nullptr),
     judgeEngine_(nullptr),
-    hasSelectedProblem_(false)
+    hasSelectedProblem_(false),
+    progressStore_(nullptr),
+    userId_(QStringLiteral("practice"))
 {
     ui->setupUi(this);
     ui->checkCompilerButton->setFixedSize(140, 30);
@@ -37,13 +39,26 @@ MainWindow::MainWindow(QWidget *parent)
 
     QString compilerPath=QDir(appDir).filePath("toolchain/bin/g++.exe");
 
+    const QString progressPath=QDir(appDir).filePath("data/progress.txt"); // 进度文件路径
+
     library_=new ProblemLibrary(packagesDir.toStdString());
 
     checker_=new CompilerChecker(compilerPath.toStdString(),this);
 
     judgeEngine_=new JudgeEngine(compilerPath.toStdString(),this);
 
+    progressStore_=new ProgressStore(progressPath.toStdString());
+
     ui->statusLabel->setText(QStringLiteral("程序初始化完成"));
+
+    std::string progressError; // 保存进度加载错误
+
+    if (!progressStore_->load(progressError)) // 尝试加载进度文件
+    {
+        ui->statusLabel->setText( // 显示加载错误
+            QString::fromUtf8( // 转换 UTF-8 错误文字
+                progressError.c_str())); // 获取错误内容
+    }
 
 
     connect(ui->importButton,&QPushButton::clicked,this,&MainWindow::refreshProblems);
@@ -317,7 +332,7 @@ void MainWindow::startJudge()
         return;
     }
 
-    //禁止判题期间重复判题、重新选择源码、导入题包、刷新题库、检查编译器
+    //禁止判题期间重复判题、重新选择源码、导入题包、刷新题库、检查编译器、切换题目
     ui->judgeButton->setEnabled(false);
     ui->chooseSourceButton->setEnabled(false);
     ui->importButton->setEnabled(false);
@@ -347,7 +362,7 @@ void MainWindow::onJudgeFinished()
     ui->statusLabel->setText( // 更新状态栏
         QStringLiteral("判题完成，耗时 %1 ms") // 设置耗时提示格式
             .arg(result.elapsedMs)); // 填入实际耗时
-    // 恢复判题、源码选择、导入、刷新、编译器检查、切换按钮
+    // 恢复判题、源码选择、导入、刷新、编译器检查、切换题目按钮
     ui->judgeButton->setEnabled(true);
     ui->chooseSourceButton->setEnabled(true);
     ui->importButton->setEnabled(true);
@@ -357,23 +372,13 @@ void MainWindow::onJudgeFinished()
 
 }
 
-void MainWindow::closeEvent(QCloseEvent*event)
+void MainWindow::closeEvent(QCloseEvent* event)
 {
-    if(judgeEngine_->isBusy())
+    if (judgeEngine_->isBusy())
     {
-        //提示用户等待
         ui->statusLabel->setText(QStringLiteral("判题进行中，请等待结束后再关闭"));
-
-        event->ignore();//拒绝本次关闭请求
+        event->ignore();
         return;
     }
     QMainWindow::closeEvent(event);
 }
-
-
-
-
-
-
-
-

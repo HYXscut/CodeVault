@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>900</width>
-    <height>600</height>
+    <height>705</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -35,13 +35,13 @@
       <property name="minimumSize">
        <size>
         <width>0</width>
-        <height>240</height>
+        <height>150</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
         <width>16777215</width>
-        <height>240</height>
+        <height>150</height>
        </size>
       </property>
       <property name="rowCount">
@@ -73,6 +73,13 @@
      </widget>
     </item>
     <item>
+     <widget class="QLabel" name="label_4">
+      <property name="text">
+       <string>题目内容</string>
+      </property>
+     </widget>
+    </item>
+    <item>
      <widget class="QTextEdit" name="statementText">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Maximum">
@@ -83,25 +90,25 @@
       <property name="minimumSize">
        <size>
         <width>0</width>
-        <height>140</height>
+        <height>240</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
         <width>16777215</width>
-        <height>140</height>
+        <height>240</height>
        </size>
       </property>
      </widget>
     </item>
     <item>
      <widget class="QWidget" name="widget_3" native="true">
-      <layout class="QHBoxLayout" name="horizontalLayout_3">
+      <layout class="QGridLayout" name="gridLayout">
        <property name="leftMargin">
         <number>0</number>
        </property>
        <property name="topMargin">
-        <number>0</number>
+        <number>10</number>
        </property>
        <property name="rightMargin">
         <number>0</number>
@@ -109,14 +116,35 @@
        <property name="bottomMargin">
         <number>0</number>
        </property>
-       <item>
-        <widget class="QTextEdit" name="actualOutputText"/>
-       </item>
-       <item>
+       <item row="1" column="1">
         <widget class="QTextEdit" name="expectedOutputText"/>
        </item>
-       <item>
+       <item row="1" column="2">
         <widget class="QTextEdit" name="errorOutputText"/>
+       </item>
+       <item row="1" column="0">
+        <widget class="QTextEdit" name="actualOutputText"/>
+       </item>
+       <item row="0" column="0">
+        <widget class="QLabel" name="label">
+         <property name="text">
+          <string>实际运行结果</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLabel" name="label_2">
+         <property name="text">
+          <string>正确答案</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QLabel" name="label_3">
+         <property name="text">
+          <string>错误输出</string>
+         </property>
+        </widget>
        </item>
       </layout>
      </widget>
@@ -164,6 +192,27 @@
        </item>
        <item>
         <widget class="QLabel" name="resultLabel">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>50</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>50</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::Shape::Panel</enum>
+         </property>
          <property name="text">
           <string>等待判题</string>
          </property>
