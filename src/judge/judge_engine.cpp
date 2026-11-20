@@ -10,34 +10,62 @@
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QTimer>
-#include <memory>
 
-#include <utility>
+using namespace std;
 
-JudgeEngine::JudgeEngine(std::string compilerPath, QObject *parent)
-    : QObject(parent), compilerPath_(std::move(compilerPath))
+JudgeEngine::JudgeEngine(string compilerPath, QObject *parent)
+    : QObject(parent)
 {
+    // 在构造函数体内用普通赋值初始化成员变量（与 CompilerChecker 写法一致）
+    compilerPath_ = compilerPath;
+    stage_ = STAGE_IDLE;
+    workDir_ = nullptr;
+    currentIndex_ = 0;
+    passedCount_ = 0;
+    executedCount_ = 0;
+    totalElapsedMs_ = 0;
+    timedOut_ = false;
+    outputLimitExceeded_ = false;
+    ioError_ = false;
+    ioErrorMessage_.clear();
+    cleanupError_.clear();
+    taskId_ = 0;
+    stepId_ = 0;
+    timerStepId_ = 0;
+    stepSettled_ = false;
+
     process_ = new QProcess(this);
     timer_ = new QTimer(this);
-
-    timer_->setSingleShot(true);
+    timer_->setSingleShot(true); // 超时定时器只触发一次
 
     connect(process_, &QProcess::finished, this, &JudgeEngine::onProcessFinished);
-
     connect(process_, &QProcess::errorOccurred, this, &JudgeEngine::onProcessError);
-
     connect(timer_, &QTimer::timeout, this, &JudgeEngine::onTimeout);
-
     connect(process_, &QProcess::started, this, &JudgeEngine::onProcessStarted);
     connect(process_, &QProcess::readyReadStandardOutput, this, &JudgeEngine::onStdoutReady);
     connect(process_, &QProcess::readyReadStandardError, this, &JudgeEngine::onStderrReady);
 }
 
-JudgeEngine::~JudgeEngine() = default;
+JudgeEngine::~JudgeEngine()
+{
+    // 若对象销毁时仍有外部进程在运行，先终止并等待退出，避免目录被占用
+    if (process_ != nullptr && process_->state() != QProcess::NotRunning)
+    {
+        process_->kill();
+        process_->waitForFinished(1000);
+    }
+
+    // 如果对象销毁时临时目录指针还没释放，在这里手动 delete，防止内存泄漏
+    if (workDir_ != nullptr)
+    {
+        delete workDir_;
+        workDir_ = nullptr;
+    }
+}
 
 bool JudgeEngine::isBusy() const
 {
-    return stage_ != Stage::Idle;
+    return stage_ != STAGE_IDLE;
 }
 
 JudgeResult JudgeEngine::getResult()
@@ -45,7 +73,7 @@ JudgeResult JudgeEngine::getResult()
     return result_;
 }
 
-bool JudgeEngine::startJudge(Problem problem, std::string sourcePath, std::vector<TestCase> tests, std::string &error)
+bool JudgeEngine::startJudge(Problem problem, string sourcePath, vector<TestCase> tests, string &error)
 {
     // 1. 防止重复判题
     if (isBusy())
@@ -68,11 +96,26 @@ bool JudgeEngine::startJudge(Problem problem, std::string sourcePath, std::vecto
         return false;
     }
 
-    // 4. 第二周只支持测试点1
-    if (tests.size() != 1 || tests[0].index != 1)
+    // 4. 第三周：检查测试点数量与连续编号（1..testCount）
+    if (problem.testCount <= 0 || tests.empty())
     {
-        error = "第二周只支持测试点1";
+        error = "题目测试点数量必须大于 0";
         return false;
+    }
+
+    if ((int)tests.size() != problem.testCount)
+    {
+        error = "传入的测试点数量与题目 testCount 不一致";
+        return false;
+    }
+
+    for (int i = 0; i < (int)tests.size(); ++i)
+    {
+        if (tests[i].index != i + 1)
+        {
+            error = "测试点编号必须从 1 开始连续递增";
+            return false;
+        }
     }
 
     // 5. 检查学生源码
@@ -102,11 +145,12 @@ bool JudgeEngine::startJudge(Problem problem, std::string sourcePath, std::vecto
         return false;
     }
 
-    // 8. 为本次判题创建唯一临时目录
-    auto tempDir = std::make_unique<QTemporaryDir>(QDir(workRoot).filePath("judge-XXXXXX"));
+    // 8. 为本次判题创建唯一临时目录（用普通指针 + new 创建）
+    QTemporaryDir *tempDir = new QTemporaryDir(QDir(workRoot).filePath("judge-XXXXXX"));
 
     if (!tempDir->isValid())
     {
+        delete tempDir; // 创建失败也要及时释放内存，防止泄漏
         error = "无法创建临时目录";
         return false;
     }
@@ -116,26 +160,35 @@ bool JudgeEngine::startJudge(Problem problem, std::string sourcePath, std::vecto
 
     if (!QFile::copy(source, copiedSource))
     {
+        delete tempDir; // 复制失败提前返回前释放 tempDir
         error = "复制学生源码失败";
         return false;
     }
 
     // 保存本次任务的临时工作目录
-    workDir_ = std::move(tempDir);
+    if (workDir_ != nullptr)
+    {
+        delete workDir_;
+        workDir_ = nullptr;
+    }
+    workDir_ = tempDir;
 
-    // 保存题目和测试点
-    problem_ = std::move(problem);
-    test_ = std::move(tests[0]);
-    sourcePath_ = std::move(sourcePath);
+    // 保存题目、全部测试点和原源码路径副本
+    problem_ = problem;
+    tests_ = tests;
+    sourcePath_ = sourcePath;
+    currentIndex_ = 0;
+    passedCount_ = 0;
+    executedCount_ = 0;
+    totalElapsedMs_ = 0;
 
-    // 清空上一次任务的结果
-    result_ = JudgeResult{};
+    // 清空上一次任务的结果（全部 AC 或 CE 时 testIndex 约定为 0）
+    result_ = JudgeResult();
 
     result_.packageId = problem_.packageId;
     result_.problemId = problem_.problemId;
     result_.sourcePath = sourcePath_;
-    result_.testIndex = test_.index;
-    result_.expectedOutput = test_.expectedOutput;
+    result_.testIndex = 0;
 
     compilerOutput_.clear();
     actualOutput_.clear();
@@ -143,8 +196,15 @@ bool JudgeEngine::startJudge(Problem problem, std::string sourcePath, std::vecto
 
     timedOut_ = false;
     outputLimitExceeded_ = false;
+    ioError_ = false;
+    ioErrorMessage_.clear();
+    cleanupError_.clear();
+    ++taskId_;
+    ++stepId_;
+    timerStepId_ = 0;
+    stepSettled_ = false;
     runClock_.invalidate();
-    stage_ = Stage::Compiling;
+    stage_ = STAGE_COMPILING;
 
     error.clear();
 
@@ -156,8 +216,11 @@ bool JudgeEngine::startJudge(Problem problem, std::string sourcePath, std::vecto
 
 void JudgeEngine::startCompile()
 {
-    if (stage_ != Stage::Compiling || !workDir_)
+    if (stage_ != STAGE_COMPILING || workDir_ == nullptr)
         return;
+
+    ++stepId_;
+    stepSettled_ = false;
 
     // 设置 g++ 的工作目录
     process_->setWorkingDirectory(workDir_->path());
@@ -186,7 +249,8 @@ void JudgeEngine::startCompile()
     args << "-o";
     args << "main.exe";
 
-    // 编译最多等待30秒
+    // 记录本次定时器所属步骤编号，编译最多等待 30 秒
+    timerStepId_ = stepId_;
     timer_->start(30000);
 
     // 异步启动g++
@@ -195,26 +259,42 @@ void JudgeEngine::startCompile()
 
 void JudgeEngine::startRun()
 {
-    // 1. 检查当前状态
-    if (stage_ != Stage::Running || !workDir_)
+    // 1. 检查当前状态与当前点下标范围
+    if (stage_ != STAGE_RUNNING || workDir_ == nullptr)
         return;
+
+    ++stepId_;
+    stepSettled_ = false;
+
+    if (currentIndex_ < 0 || currentIndex_ >= (int)tests_.size())
+    {
+        stepSettled_ = true;
+        result_.status = "InternalError";
+        result_.error = "测试点下标越界";
+        finishJudge();
+        return;
+    }
 
     // 2. 找到编译生成的 main.exe
     QString exePath = workDir_->filePath("main.exe");
 
     if (!QFileInfo(exePath).isFile())
     {
+        stepSettled_ = true;
         result_.status = "InternalError";
         result_.error = "找不到编译生成的程序";
         finishJudge();
         return;
     }
 
-    // 3. 清空运行阶段的数据
+    // 3. 重置当前点运行阶段的标志与缓冲
     timedOut_ = false;
     outputLimitExceeded_ = false;
+    ioError_ = false;
+    ioErrorMessage_.clear();
     actualOutput_.clear();
     runtimeError_.clear();
+    runClock_.invalidate();
 
     // 4. 设置工作目录
     process_->setWorkingDirectory(workDir_->path());
@@ -222,47 +302,108 @@ void JudgeEngine::startRun()
     // 5. 分别收集标准输出和错误输出
     process_->setProcessChannelMode(QProcess::SeparateChannels);
 
-    // 6. 异步启动学生程序
+    // 6. 异步启动学生程序运行当前测试点
     process_->start(exePath);
 }
 
 void JudgeEngine::finishJudge()
 {
-    if (stage_ == Stage::Idle || stage_ == Stage::Cleaning)
+    if (stage_ == STAGE_IDLE || stage_ == STAGE_CLEANING)
         return;
 
-    // 进程未结束，暂时不能清理
+    // 如果外部进程仍在运行，先短等其结束；仍未退出则保持引擎锁定并报清理错误
     if (process_->state() != QProcess::NotRunning)
-        return;
+    {
+        process_->waitForFinished(1000);
+        if (process_->state() != QProcess::NotRunning)
+        {
+            result_.status = "InternalError";
+            if (!result_.error.empty())
+                result_.error += "；";
+            result_.error += "外部进程未能退出，判题引擎保持锁定";
+            return;
+        }
+    }
 
-    stage_ = Stage::Cleaning;
+    stage_ = STAGE_CLEANING;
 
     timer_->stop();
 
-    // 清理本次临时工作目录
-    if (workDir_)
+    // 若进程树清理阶段记录了错误，统一按系统错误处理
+    if (!cleanupError_.empty())
+    {
+        result_.status = "InternalError";
+        if (!result_.error.empty())
+            result_.error += "；";
+        result_.error += cleanupError_;
+    }
+
+    // 清理本次临时工作目录并释放指针（目录清理失败按系统错误处理，但不阻止后续使用新目录）
+    if (workDir_ != nullptr)
     {
         if (!workDir_->remove())
         {
-            result_.error += "；临时目录清理失败";
+            result_.status = "InternalError";
+            if (!result_.error.empty())
+                result_.error += "；";
+            result_.error += "临时目录清理失败";
         }
 
-        workDir_.reset();
+        delete workDir_;
+        workDir_ = nullptr;
     }
 
-    stage_ = Stage::Idle;
+    tests_.clear();
+    stage_ = STAGE_IDLE;
 
     // 所有结果已经保存，再通知 C
     emit judgeFinished();
 }
 
+void JudgeEngine::terminateCompileTree()
+{
+    // 在父进程还未被杀死前获取其有效 PID，避免 PID 失效后找不到子进程
+    long long pid = (long long)process_->processId();
+    bool taskkillOk = false;
+
+    if (pid > 0)
+    {
+        QProcess killer;
+        QStringList killArgs;
+        killArgs << "/PID" << QString::number(pid) << "/T" << "/F";
+        killer.start("taskkill", killArgs);
+
+        if (killer.waitForFinished(3000) &&
+            killer.exitStatus() == QProcess::NormalExit &&
+            killer.exitCode() == 0)
+        {
+            taskkillOk = true;
+        }
+    }
+
+    // 如果 taskkill 未成功且编译器仍在运行，记下清理错误并兜底调用 kill()
+    if (!taskkillOk && process_->state() != QProcess::NotRunning)
+    {
+        cleanupError_ = "编译超时，清理编译器进程树失败";
+        process_->kill();
+    }
+}
+
 void JudgeEngine::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
+    if (stage_ != STAGE_COMPILING && stage_ != STAGE_RUNNING)
+        return;
+
+    // 防止同一步骤重复结算
+    if (stepSettled_)
+        return;
+    stepSettled_ = true;
+
     // 停止超时计时器
     timer_->stop();
 
     // 第一种情况：编译器运行结束
-    if (stage_ == Stage::Compiling)
+    if (stage_ == STAGE_COMPILING)
     {
         onStdoutReady();
         onStderrReady();
@@ -273,23 +414,40 @@ void JudgeEngine::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatu
 
         if (timedOut_)
         {
-            result_.status = "CE";
-            result_.error = "编译超时";
+            result_.status = "InternalError";
+            result_.error = "编译超时（超过 30 秒）";
         }
         else if (outputLimitExceeded_)
         {
-            result_.status = "CE";
-            result_.error = "编译输出超过16 MiB";
+            result_.status = "InternalError";
+            result_.error = "编译输出超过 16 MiB 上限";
         }
-        else if (exitStatus != QProcess::NormalExit || exitCode != 0 || !QFileInfo(exePath).isFile())
+        else if (ioError_)
         {
+            result_.status = "InternalError";
+            result_.error = ioErrorMessage_;
+        }
+        else if (exitStatus != QProcess::NormalExit)
+        {
+            result_.status = "InternalError";
+            result_.error = "编译器异常崩溃退出";
+        }
+        else if (exitCode != 0)
+        {
+            // 只有编译器正常退出且返回非 0 退出码，才判定为源码编译错误 CE
             result_.status = "CE";
             result_.error = "编译失败";
         }
+        else if (!QFileInfo(exePath).isFile())
+        {
+            result_.status = "InternalError";
+            result_.error = "编译器未生成可执行文件 main.exe";
+        }
         else
         {
-            // 编译成功，准备运行学生程序
-            stage_ = Stage::Running;
+            // 编译成功（整次任务只编译这一次），从第 0 号下标（第 1 个测试点）开始逐点运行
+            currentIndex_ = 0;
+            stage_ = STAGE_RUNNING;
 
             QTimer::singleShot(0, this, &JudgeEngine::startRun);
 
@@ -300,50 +458,103 @@ void JudgeEngine::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatu
         return;
     }
 
-    // 第二种情况：学生程序运行结束
-    if (stage_ == Stage::Running)
+    // 第二种情况：学生程序当前测试点运行结束
+    if (stage_ == STAGE_RUNNING)
     {
-        // 保存实际运行时间
+        // 计算当前测试点的运行耗时并累加到总耗时
+        long long pointElapsedMs = 0;
         if (runClock_.isValid())
         {
-            result_.elapsedMs = runClock_.elapsed();
+            pointElapsedMs = runClock_.elapsed();
         }
+        totalElapsedMs_ += pointElapsedMs;
 
-        // 读取学生程序的输出
+        // 读取学生程序在当前测试点残留的输出
         onStdoutReady();
         onStderrReady();
 
-        result_.actualOutput = actualOutput_.toStdString();
+        string pointActual = actualOutput_.toStdString();
+        string pointExpected = tests_[currentIndex_].expectedOutput;
+        string pointStderr = runtimeError_.toStdString();
+        string pointStatus;
 
-        result_.runtimeError = runtimeError_.toStdString();
-
-        // 优先判断是否超时
+        // 1. 先检查是否已标记超时（防止 kill() 造成的非零退出覆盖 TLE）
         if (timedOut_)
         {
-            result_.status = "TLE";
+            pointStatus = "TLE";
+            if (!pointStderr.empty())
+                pointStderr += "\n";
+            pointStderr += "程序运行超时（时限 " + to_string(problem_.timeLimitMs) + " ms）";
         }
+        // 2. 再检查是否输出超限（第三周独立状态 OutputLimit，不能用截断输出判 AC/WA）
         else if (outputLimitExceeded_)
         {
-            result_.status = "RE";
-            result_.error = "程序输出超过16 MiB";
+            pointStatus = "OutputLimit";
+            result_.error = "程序输出超过 16 MiB 上限";
         }
-        // 再判断是否运行异常
+        // 3. 再检查是否发生管道读写错误（系统错误，不能用不完整输出判 AC/WA）
+        else if (ioError_)
+        {
+            pointStatus = "InternalError";
+            result_.error = ioErrorMessage_;
+        }
+        // 4. 再检查是否异常崩溃或非零退出（RE）
         else if (exitStatus != QProcess::NormalExit || exitCode != 0)
         {
-            result_.status = "RE";
+            pointStatus = "RE";
+            if (!pointStderr.empty())
+                pointStderr += "\n";
+            if (exitStatus != QProcess::NormalExit)
+                pointStderr += "程序异常崩溃退出";
+            else
+                pointStderr += "程序非零退出（退出码：" + to_string(exitCode) + "）";
         }
+        // 5. 正常退出且未触发保护，调用多态比较器判断 AC / WA
         else
         {
-            // 程序正常结束，比较输出
-            ExactJudge judge;
+            ExactJudge exactJudge;
+            OutputJudge *judge = &exactJudge;
 
-            bool correct = judge.compare(result_.actualOutput, result_.expectedOutput);
+            bool correct = judge->compare(pointActual, pointExpected);
 
             if (correct)
-                result_.status = "AC";
+                pointStatus = "AC";
             else
-                result_.status = "WA";
+                pointStatus = "WA";
         }
+
+        // 如果当前点没有通过，立即停止后续测试点并收尾
+        if (pointStatus != "AC")
+        {
+            result_.status = pointStatus;
+            result_.testIndex = tests_[currentIndex_].index;
+            result_.elapsedMs = totalElapsedMs_;
+            result_.actualOutput = pointActual;
+            result_.expectedOutput = pointExpected;
+            result_.runtimeError = pointStderr;
+
+            finishJudge();
+            return;
+        }
+
+        // 当前点 AC，通过数加一
+        ++passedCount_;
+
+        // 如果后面还有测试点，就继续异步启动下一个点
+        if (currentIndex_ + 1 < (int)tests_.size())
+        {
+            ++currentIndex_;
+            QTimer::singleShot(0, this, &JudgeEngine::startRun);
+            return;
+        }
+
+        // 所有测试点均已通过：testIndex 为 0，过渡输出字段保留最后一个点
+        result_.status = "AC";
+        result_.testIndex = 0;
+        result_.elapsedMs = totalElapsedMs_;
+        result_.actualOutput = pointActual;
+        result_.expectedOutput = pointExpected;
+        result_.runtimeError = pointStderr;
 
         finishJudge();
         return;
@@ -352,25 +563,32 @@ void JudgeEngine::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatu
 
 void JudgeEngine::onProcessError(QProcess::ProcessError error)
 {
-    // 只处理编译和运行阶段
-    if (stage_ != Stage::Compiling && stage_ != Stage::Running)
+    // 只处理编译和运行阶段，且当前步骤尚未结算
+    if (stage_ != STAGE_COMPILING && stage_ != STAGE_RUNNING)
+    {
+        return;
+    }
+    if (stepSettled_)
     {
         return;
     }
 
-    // 处理子进程启动失败
+    // 处理子进程启动失败（第三周：无论是编译器还是被测程序启动失败，均归为 InternalError）
     if (error == QProcess::FailedToStart)
     {
+        stepSettled_ = true;
         timer_->stop();
 
-        if (stage_ == Stage::Compiling)
+        result_.status = "InternalError";
+        if (stage_ == STAGE_COMPILING)
         {
-            result_.status = "CE";
             result_.error = "编译器启动失败：";
         }
         else
         {
-            result_.status = "RE";
+            result_.testIndex = tests_[currentIndex_].index;
+            result_.elapsedMs = totalElapsedMs_;
+            result_.expectedOutput = tests_[currentIndex_].expectedOutput;
             result_.error = "学生程序启动失败：";
         }
 
@@ -384,14 +602,31 @@ void JudgeEngine::onProcessError(QProcess::ProcessError error)
         return;
     }
 
-    // 其他进程错误暂时不在这里结束任务
-    // 例如进程崩溃，交给 onProcessFinished() 统一判断
+    // 处理进程通信读写错误（不能拿不完整输出去判 AC/WA）
+    if (error == QProcess::ReadError || error == QProcess::WriteError)
+    {
+        ioError_ = true;
+        ioErrorMessage_ = "进程通信读写失败：" + process_->errorString().toUtf8().toStdString();
+        if (process_->state() != QProcess::NotRunning)
+        {
+            process_->kill();
+        }
+        return;
+    }
+
+    // 其他进程错误（例如 Crashed）交给 onProcessFinished() 统一判断
 }
 
 void JudgeEngine::onTimeout()
 {
     // 只有编译或运行阶段才需要超时处理
-    if (stage_ != Stage::Compiling && stage_ != Stage::Running)
+    if (stage_ != STAGE_COMPILING && stage_ != STAGE_RUNNING)
+    {
+        return;
+    }
+
+    // 核对步骤编号和结算标志，防止旧点的迟到定时器误伤新点
+    if (stepSettled_ || timerStepId_ != stepId_)
     {
         return;
     }
@@ -400,35 +635,46 @@ void JudgeEngine::onTimeout()
     if (process_->state() == QProcess::NotRunning)
         return;
 
-    // 标记本次任务发生了超时
+    // 标记本次步骤发生了超时
     timedOut_ = true;
 
-    // 强制终止当前进程
-    process_->kill();
+    if (stage_ == STAGE_COMPILING)
+    {
+        // 编译超时可能存在配套子进程，按本任务有效 PID 清理整棵进程树
+        terminateCompileTree();
+    }
+    else
+    {
+        // 学生单文件程序直接强制终止
+        process_->kill();
+    }
 
     // 不立即调用 finishJudge()
-    // 等 QProcess 发出 finished() 信号后再处理
+    // 等 QProcess 发出 finished() 信号后再统一收尾
 }
 
 void JudgeEngine::onProcessStarted()
 {
-    // 只有运行学生程序时才发送测试输入
-    if (stage_ != Stage::Running)
+    // 只有运行学生程序且当前点尚未结算时才发送输入
+    if (stage_ != STAGE_RUNNING || stepSettled_)
         return;
 
-    // 记录程序开始运行的时刻
+    // 确认被测程序已成功启动，已执行数加一
+    ++executedCount_;
+
+    // 记录当前点开始运行的时刻
     runClock_.start();
 
-    // 启动超时倒计时
+    // 绑定步骤编号并启动当前点的超时倒计时
+    timerStepId_ = stepId_;
     timer_->start(problem_.timeLimitMs);
 
-    // 将测试输入转换为 QByteArray
-    QByteArray input = QByteArray::fromStdString(test_.input);
+    // 将当前测试点的输入转换为 QByteArray 并发送给学生程序
+    QByteArray input = QByteArray::fromStdString(tests_[currentIndex_].input);
 
-    // 把输入发送给学生程序
     process_->write(input);
 
-    // 关闭输入通道，表示输入结束
+    // 关闭输入通道，表示输入结束（让等待 EOF 的程序能正常结束）
     process_->closeWriteChannel();
 }
 
@@ -444,37 +690,51 @@ void JudgeEngine::onStderrReady()
 
 void JudgeEngine::collectOutput(bool fromStderr)
 {
-    if (stage_ != Stage::Compiling && stage_ != Stage::Running)
+    if (stage_ != STAGE_COMPILING && stage_ != STAGE_RUNNING)
         return;
 
     if (outputLimitExceeded_)
         return;
 
-    // 最大保留16 MiB输出
-    constexpr qsizetype limit = 16 * 1024 * 1024;
+    // 最大保留 16 MiB 输出（用普通 long long 常量表示字节数）
+    const long long limit = 16 * 1024 * 1024;
 
-    // 选择要读取的通道
-    process_->setReadChannel(fromStderr ? QProcess::StandardError : QProcess::StandardOutput);
+    // 用普通 if/else 选择要读取的通道
+    if (fromStderr)
+    {
+        process_->setReadChannel(QProcess::StandardError);
+    }
+    else
+    {
+        process_->setReadChannel(QProcess::StandardOutput);
+    }
 
-    // 确定数据保存在哪个缓冲区
+    // 确定数据保存在哪个缓冲区，并统计已读字节数
     QByteArray *target = nullptr;
-    qsizetype used = 0;
+    long long used = 0;
 
-    if (stage_ == Stage::Compiling)
+    if (stage_ == STAGE_COMPILING)
     {
         target = &compilerOutput_;
         used = compilerOutput_.size();
     }
     else
     {
-        target = fromStderr ? &runtimeError_ : &actualOutput_;
+        if (fromStderr)
+        {
+            target = &runtimeError_;
+        }
+        else
+        {
+            target = &actualOutput_;
+        }
 
         used = actualOutput_.size() + runtimeError_.size();
     }
 
-    qsizetype remaining = limit - used;
+    long long remaining = limit - used;
 
-    // 最多读取剩余容量再加1字节
+    // 最多读取剩余容量再加 1 字节，用来判断是否超限
     QByteArray data = process_->read(remaining + 1);
 
     if (data.size() > remaining)

@@ -1,24 +1,54 @@
-# 本地构建中间产物与生成目录
-/build/
-/build-*/
+# CMake / Qt Creator 构建目录（适用于根目录和 ui/ 等子目录）
+build/
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+build.ninja
+rules.ninja
+.ninja_deps
+.ninja_log
+compile_commands.json
+CMakeUserPresets.json
+
+# 计划中的本机运行目录、判题工作区、完整工具链和用户数据
 /run/
 /work/
-
-# 本地编译器工具链与运行时数据（不提交大体积工具链与用户数据）
 /toolchain/
 /data/
 
-# 练习生成的二进制文件
-/examples/*.exe
-/examples/*.o
-/examples/*.obj
+# C++ 编译、链接产物及部署到本机的运行库
+*.o
+*.obj
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.pch
 
-# IDE 本地私有配置文件
-*.user
-.qtcreator/
+# IDE 缓存和本机私有配置
+.vs/
 .vscode/
 .idea/
-# Visual Studio and Qt Creator local state
-.vs/
-/ui/build/
+.qtcreator/
+.cache/
+.clangd
+.clang-format
+*.user
+*.user.*
+*.autosave
+
+# 个人测试和本机辅助脚本不属于计划交付文件，只保留在本机
+/tests/
+/src/judge/test.cpp
+/build.ps1
+/run-test.cmd
+/CMakePresets.json
+
+# 保留计划中的业务源码、examples/、samples/ 和 docs/。
+# 不忽略 *.out：samples/demo/ 中的 1.out、2.out 是必需的标准答案。
+# clangd、格式配置和本机 CMake 预设不上传。
 
