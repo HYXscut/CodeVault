@@ -16,15 +16,25 @@ set(PROJECT_SOURCES
     mainwindow.cpp
     mainwindow.h
     mainwindow.ui
-    ../src/common/types.h
-    ../src/problem/problem_library.cpp
-    ../src/problem/problem_library.h
-    ../src/compiler/compiler_checker.cpp
-    ../src/compiler/compiler_checker.h
-    ../src/judge/judge_engine.cpp
-    ../src/judge/judge_engine.h
-    ../src/judge/output_judge.cpp
-    ../src/judge/output_judge.h
+    logindialog.cpp
+    logindialog.h
+    logindialog.ui
+    filterdialog.cpp
+    filterdialog.h
+    filterdialog.ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/common/types.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/problem/problem_library.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/problem/problem_library.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/compiler/compiler_checker.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/compiler/compiler_checker.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/judge/judge_engine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/judge/judge_engine.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/judge/output_judge.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/judge/output_judge.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/progress/progress_store.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/progress/progress_store.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/account/account_manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/account/account_manager.h
 )
 
 qt_add_executable(CodeVaultUI

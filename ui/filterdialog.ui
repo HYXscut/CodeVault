@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>FilterDialog</class>
+ <widget class="QDialog" name="FilterDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>420</width>
+    <height>260</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>题目筛选</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <layout class="QFormLayout" name="formLayout">
+     <item row="0" column="0">
+      <widget class="QLabel" name="titleLabel">
+       <property name="text"><string>标题</string></property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLineEdit" name="titleEdit">
+       <property name="placeholderText"><string>按标题搜索</string></property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="tagLabel">
+       <property name="text"><string>标签</string></property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QComboBox" name="tagComboBox">
+       <item><property name="text"><string>全部标签</string></property></item>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="statusLabel">
+       <property name="text"><string>状态</string></property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QComboBox" name="statusComboBox">
+       <item><property name="text"><string>全部状态</string></property></item>
+       <item><property name="text"><string>未开始</string></property></item>
+       <item><property name="text"><string>练习中</string></property></item>
+       <item><property name="text"><string>本地通过</string></property></item>
+      </widget>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLabel" name="packageLabel">
+       <property name="text"><string>题包</string></property>
+      </widget>
+     </item>
+     <item row="3" column="1">
+      <widget class="QComboBox" name="packageComboBox">
+       <item><property name="text"><string>全部题包</string></property></item>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttonLayout">
+     <item><spacer name="horizontalSpacer"><property name="orientation"><enum>Qt::Horizontal</enum></property></spacer></item>
+     <item><widget class="QPushButton" name="applyButton"><property name="text"><string>确定</string></property></widget></item>
+     <item><widget class="QPushButton" name="clearButton"><property name="text"><string>清空</string></property></widget></item>
+     <item><widget class="QPushButton" name="cancelButton"><property name="text"><string>取消</string></property></widget></item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

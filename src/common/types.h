@@ -24,6 +24,14 @@ struct TestCase{
 	std::string input;//从1.in读取的完整内容，保留空格和末尾换行
 	std::string expectedOutput;//从1.out读取的完整标准输出，保留空格和换行
 };
+struct TestPointResult {
+	int index = 0;
+	std::string status;
+	long long elapsedMs = 0;
+	std::string error;
+	std::string runtimeError;
+	bool executed = false;
+};
 struct JudgeResult{
 	//B判题后填写，C界面展示的数据
 	std::string packageId;//本次判题的题包
@@ -37,5 +45,9 @@ struct JudgeResult{
 	std::string compilerOutput;//编译器给出的文字说明
 	std::string runtimeError;//运行错误、超时说明或者程序错误的输出
 	std::string error;//判题器自身参数、文件等错误
+	int passedCount = 0;
+	int executedCount = 0;
+	int totalCount = 0;
+	std::vector<TestPointResult> pointResults;
 };
 #endif
