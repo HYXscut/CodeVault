@@ -1057,29 +1057,32 @@ bool ProblemLibrary::getTestCase(
     // 输入参数 packageId/problemId：用于找题。
     // 输出参数：成功时设置 result.index、result.input 和 result.expectedOutput，
     // 并清空 error；失败时返回 false，通过 error 写明原因，且不修改 result。
-    // 输入参数 testIndex：测试点编号，第二周只接受 1；
-    // 下周再扩展到 1 到 testCount 之间；若不在范围内则返回 false。
+    // 输入参数 testIndex：测试点编号，合法范围为 1 到该题的 testCount。
+    // 若测试点总数无效或编号越界，则返回 false。
     // 返回值：全部检查和读取成功才返回 true，否则返回 false；失败不改变 result。
     // 实现：先调用已有的 findProblem 找题、检查编号和 testCount，
-    // 再读取 1.in、1.out，确认两个都成功后才赋值。
-
+    // 再按编号读取对应的 .in 和 .out 文件，确认两个都成功后才赋值。
     Problem problem;
     if (!findProblem(packageId, problemId, problem, error)) {
         return false;
     }
 
-    if (testIndex != 1) {
-        error = "第二周题目只接受测试点编号 1，其他编号不合法";
+    if (problem.testCount < 1 || problem.testCount > 20) {
+        error = "该题测试点数量无效，应为 1 到 20";
         return false;
     }
 
-    if (problem.testCount < 1) {
-        error = "该题没有可读取的测试点";
+    if (testIndex < 1 || testIndex > problem.testCount) {
+        error = "测试点编号超出范围，应为 1 到该题测试点总数";
         return false;
     }
-
+    
+    std::ostringstream numberStream; // 用字符串流接收整数编号。
+    numberStream << testIndex; // 例如把整数 2 写入字符串流。
+    const std::string number = numberStream.str(); // 取出字符串 "2"。
+    
     const fs::path inputPath =
-        fs::u8path(problem.problemDir) / "1.in"; // 从保存的题目副本目录组成输入文件路径
+        fs::u8path(problem.problemDir) / (number + ".in"); // 按编号生成输入文件路径。
 
     if (!checkReadableFile(inputPath, error)) { // 检查它是否为可读的普通文件
         return false; // 失败原因已由辅助函数写进 error
@@ -1102,7 +1105,7 @@ bool ProblemLibrary::getTestCase(
     const std::string inputText = inputBuffer.str(); // 空字符串也可能是合法输入
 
     const fs::path outputPath =
-        fs::u8path(problem.problemDir) / "1.out"; // 从保存的题目副本目录组成输出文件路径
+        fs::u8path(problem.problemDir) / (number + ".out"); // 按同一编号生成标准输出文件路径。
 
     if (!checkReadableFile(outputPath, error)) { // 检查它是否为可读的普通文件
         return false; // 失败原因已由辅助函数写进 error
@@ -1125,9 +1128,9 @@ bool ProblemLibrary::getTestCase(
     const std::string outputText = outputBuffer.str(); // 空字符串也可能是合法输出
 
     TestCase completeCase; // 先在函数内部建立一个完整测试点
-    completeCase.index = testIndex; // 记录测试点编号，本周为 1
-    completeCase.input = inputText; // 放入 1.in 的原始内容
-    completeCase.expectedOutput = outputText; // 放入 1.out 的原始内容
+       completeCase.index = testIndex; // 保存本次实际读取的测试点编号。
+    completeCase.input = inputText; // 保存对应输入文件的原始内容。
+    completeCase.expectedOutput = outputText; // 保存对应标准输出文件的原始内容。
 
     result = completeCase; // 三项都准备好后，才整体交给调用方
     error.clear(); // 成功时清除旧错误文字

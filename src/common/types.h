@@ -50,4 +50,19 @@ struct JudgeResult{
 	int totalCount = 0;
 	std::vector<TestPointResult> pointResults;
 };
+constexpr int ProgressNotStarted = 0; // 未开始。
+constexpr int ProgressInProgress = 1; // 练习中。
+constexpr int ProgressLocalAccepted = 2; // 本地通过。
+
+struct Progress // 保存一个用户对一道题的最近练习记录。
+{
+    std::string userId; // 用户编号
+    std::string packageId; // 题包编号
+    std::string problemId; // 题目编号
+    std::string sourcePath; // 用户原始源码路径，未绑定时为空。
+    int status = ProgressNotStarted; // 默认未开始
+    std::string lastSummary; // 最近判题的单行短摘要
+    std::string lastOpenedTime; // 最近打开时间，尚未记录时为空
+    std::string lastJudgedTime; // 最近有效判题时间，尚未判题时为空
+};
 #endif
