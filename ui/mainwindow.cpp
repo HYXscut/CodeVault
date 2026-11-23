@@ -41,7 +41,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
         ui->problemTable->verticalHeader()->hide(); // 隐藏题目列表左侧的行号表头
-
+    ui->pointResultTable->verticalHeader()->hide(); // 隐藏逐点结果表左侧行号和左上角黑块
     ui->pointResultTable->setColumnCount(4);//设置测试点结果表的列数
     ui->pointResultTable->setHorizontalHeaderLabels({
         QStringLiteral("测试点"),
@@ -466,15 +466,19 @@ void MainWindow::showSelectedProblems(int row,int column)//函数作用：点击
     sourcePath_=QString::fromUtf8(currentProgress_.sourcePath.c_str());//恢复源码路径
 
     ui->sourcePathEdit->setText(sourcePath_);//更新路径输入框
-
+    ui->resultLabel->setText(QStringLiteral("等待判题")); // 切换题目时重置提示
     if(sourcePath_.isEmpty())//判断是否没有绑定源码
     {
         ui->statusLabel->setText(QStringLiteral("当前题目尚未绑定源码"));
     }
 
-    else if(!QFileInfo::exists(sourcePath_))//判断源码文件是否已经不存在
+    else if(!QFileInfo(sourcePath_).isFile())
     {
-        ui->statusLabel->setText(QStringLiteral("源码路径已失效，请重新选择"));
+        ui->statusLabel->setText(
+            QStringLiteral("源码路径已失效，请重新选择")); // 保留详细提示
+
+        ui->resultLabel->setText(
+            QStringLiteral("源码路径失效")); // 在判题按钮旁显示
     }
 
     else//判断源码路径依然有效
@@ -482,14 +486,12 @@ void MainWindow::showSelectedProblems(int row,int column)//函数作用：点击
         ui->statusLabel->setText(QString::fromUtf8(currentProgress_.lastSummary.c_str()));
     }
 
-    ui->judgeButton->setEnabled(!sourcePath_.isEmpty()&&QFileInfo::exists(sourcePath_));
-
-    ui->judgeButton->setEnabled(!sourcePath_.isEmpty());
+        ui->judgeButton->setEnabled(
+        !sourcePath_.isEmpty() && QFileInfo(sourcePath_).isFile()); // 路径非空且指向普通文件才允许判题
 
     //在题面区域显示题面
     ui->statementText->setPlainText(QString::fromUtf8(problem.statement.c_str()));
-    //更新状态栏
-    ui->statusLabel->setText(QStringLiteral("当前题目：%1").arg(QString::fromUtf8(problem.title.c_str())));
+    
 }
 
 void MainWindow::checkCompiler()
@@ -756,7 +758,19 @@ void MainWindow::onJudgeFinished()
 
     ui->resultLabel->setText(QString::fromUtf8(result.status.c_str()));
 
-    ui->actualOutputText->setPlainText(QString::fromUtf8(result.actualOutput.c_str()));
+    const std::string outputPreview =
+        result.actualOutput.substr(0, 4096); // 最多取前 4096 字节供界面显示
+
+    QString outputText =
+        QString::fromUtf8(outputPreview.c_str()); // 转为界面文字
+
+    if (result.actualOutput.size() > 4096)
+    {
+        outputText += QStringLiteral(
+            "\n\n[输出过长，界面仅显示前 4096 字节]");
+    }
+
+    ui->actualOutputText->setPlainText(outputText); // 显示有限长度的预览
 
     ui->expectedOutputText->setPlainText(QString::fromUtf8(result.expectedOutput.c_str()));
 

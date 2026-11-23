@@ -204,7 +204,15 @@ bool JudgeEngine::startJudge(Problem problem, string sourcePath, vector<TestCase
     result_.problemId = problem_.problemId;
     result_.sourcePath = sourcePath_;
     result_.testIndex = 0;
+    for (int i = 0; i < static_cast<int>(tests_.size()); ++i)
+    {
+        TestPointResult point;
+        point.index = tests_[i].index; // 使用测试点的实际编号
+        point.status = "NotRun"; // 初始状态为未执行
+        point.executed = false;
 
+        result_.pointResults.push_back(point); // 为每个测试点预留记录
+    }
     compilerOutput_.clear();
     actualOutput_.clear();
     runtimeError_.clear();
@@ -590,7 +598,11 @@ void JudgeEngine::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatu
             else
                 pointStatus = "WA";
         }
-
+        TestPointResult& point = result_.pointResults[currentIndex_]; // 引用集合中的当前记录
+        point.status = pointStatus; // 保存本点状态
+        point.elapsedMs = pointElapsedMs; // 保存本点耗时
+        point.runtimeError = pointStderr; // 保存运行错误说明
+        point.error = result_.error; // 保存本点错误信息
         // 如果当前点没有通过，立即停止后续测试点并收尾
         if (pointStatus != "AC")
         {
@@ -661,7 +673,12 @@ void JudgeEngine::onProcessError(QProcess::ProcessError error)
         }
 
         result_.error += process_->errorString().toUtf8().toStdString();
-
+        if (stage_ == STAGE_RUNNING)
+        {
+            TestPointResult& point = result_.pointResults[currentIndex_];
+            point.status = "InternalError"; // 被测程序启动失败
+            point.error = result_.error;
+        }
         if (process_->state() == QProcess::NotRunning)
         {
             finishJudge();
@@ -729,7 +746,7 @@ void JudgeEngine::onProcessStarted()
 
     // 确认被测程序已成功启动，已执行数加一
     ++executedCount_;
-
+    result_.pointResults[currentIndex_].executed = true; // 当前点成功启动
     // 记录当前点开始运行的时刻
     runClock_.start();
 
