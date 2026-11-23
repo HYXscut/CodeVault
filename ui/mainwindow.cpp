@@ -117,11 +117,15 @@ MainWindow::MainWindow(QWidget *parent)
     const bool progressLoaded=progressStore_->load(progressError); // 加载进度文件
 
     // 判断进度文件是否加载失败
-    if(!progressLoaded)
+    if (!progressLoaded)
     {
-        ui->statusLabel->setText(QString::fromUtf8(progressError.c_str()));
+        QMessageBox::critical(
+            this,
+            QStringLiteral("进度文件加载失败"),
+            QString::fromUtf8(progressError.c_str()) +
+                QStringLiteral("\n原文件未修改。请检查文件后重新启动。"));
 
-        ui->judgeButton->setEnabled(false);
+        return; // 初始化未完成，不进入主界面
     }
 
     if (progressLoaded) // 只有进度文件加载成功时显示正常初始化提示
@@ -604,8 +608,6 @@ void MainWindow::startJudge()
         return; // 路径无效时结束判题函数
     }
 
-    ui->resultLabel->setText(QStringLiteral("判题中")); // 清除上一次状态并显示当前任务状态
-
     ui->countLabel->setText( // 清除上一次统计结果
         QStringLiteral("通过 0，已执行 0，总点数 0")); // 显示初始统计
 
@@ -648,12 +650,18 @@ void MainWindow::startJudge()
 
     const bool accepted=judgeEngine_->startJudge(currentProblem_,sourcePath_.toStdString(),tests,error);
 
-    if(!accepted) //判断判题请求是否被拒绝
+    if (!accepted) // 请求未被接受，没有启动判题任务
     {
-        ui->statusLabel->setText(QString::fromUtf8(error.c_str()));
+        const QString errorText = QString::fromUtf8(error.c_str());
 
-        return;
+        ui->resultLabel->setText(QStringLiteral("判题未启动"));
+        ui->errorOutputText->setPlainText(errorText); // 在右侧显示具体原因
+        ui->statusLabel->setText(errorText);
+
+        return; // 保留旧进度，不进入任务执行流程
     }
+
+    ui->resultLabel->setText(QStringLiteral("判题中")); // 请求被接受后才显示
 
     //禁止判题期间重复判题、重新选择源码、导入题包、刷新题库、检查编译器、切换题目、移除题包
     ui->judgeButton->setEnabled(false);
@@ -742,18 +750,21 @@ void MainWindow::onJudgeFinished()
 
     std::string saveError;//保存：进度保存错误
 
-    const bool saved=progressStore_->saveProgress(updatedProgress,saveError);//保存进度并记录结果
+    const bool shouldSave =
+        result.status == "AC" ||
+        result.status == "WA" ||
+        result.status == "CE" ||
+        result.status == "RE" ||
+        result.status == "TLE" ||
+        result.status == "OutputLimit"; // 只有有效判题结果才更新练习记录
 
-    if(saved)//判断进度是否已保存成功
+    const bool saved =
+        shouldSave &&
+        progressStore_->saveProgress(updatedProgress, saveError); // 系统错误时跳过保存
+
+    if (saved)
     {
-        currentProgress_=updatedProgress;//保存成功后更新内存进度
-
-        ui->statusLabel->setText(QStringLiteral("判题完成，进度已保存"));
-    }
-
-    else
-    {
-        ui->statusLabel->setText(QString::fromUtf8(saveError.c_str()));
+        currentProgress_ = updatedProgress; // 只有保存成功才更新当前内存记录
     }
 
     ui->resultLabel->setText(QString::fromUtf8(result.status.c_str()));
@@ -782,7 +793,13 @@ void MainWindow::onJudgeFinished()
     }
 
     ui->errorOutputText->setPlainText(errorText);
-    if (saved) // 判断进度是否保存成功
+
+    if (!shouldSave)
+    {
+        ui->statusLabel->setText(
+            QStringLiteral("本次发生系统错误，保留原有效进度"));
+    }
+    else if (saved) // 有效结果保存成功
     {
         ui->statusLabel->setText( // 显示判题和保存结果
             QStringLiteral("判题完成，耗时 %1 ms，进度已保存") // 设置提示格式
@@ -790,7 +807,10 @@ void MainWindow::onJudgeFinished()
     }
     else // 进度保存失败时进入此分支
     {
-        ui->statusLabel->setText( // 显示判题完成和保存失败
+        ui->errorOutputText->append(
+            QStringLiteral("进度保存失败：") +
+            QString::fromUtf8(saveError.c_str())); // 在右侧同时显示保存错误
+            ui->statusLabel->setText( // 显示判题完成和保存失败
             QStringLiteral("判题完成，耗时 %1 ms，进度保存失败：%2") // 设置提示格式
                 .arg(result.elapsedMs) // 填入耗时
                 .arg(QString::fromUtf8(saveError.c_str()))); // 填入保存错误
