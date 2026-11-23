@@ -34,6 +34,9 @@ class JudgeEngine : public QObject
     // 查询当前是否正在执行判题任务
     bool isBusy() const;
 
+    // 调整编译超时上限（默认 30000 毫秒；仅用于测试时快速验证编译超时清理）
+    void setCompileTimeoutMs(int timeoutMs);
+
   signals:
     // 判题完成信号：保存好结果并完成清理后发出
     void judgeFinished();
@@ -60,6 +63,7 @@ class JudgeEngine : public QObject
 
     int stage_;                 // 当前所处阶段
     std::string compilerPath_;  // g++ 编译器路径
+    int compileTimeoutMs_;      // 编译阶段超时上限（毫秒，默认 30000）
 
     QProcess *process_;         // 外部进程对象指针（用于运行 g++ 和学生程序）
     QTimer *timer_;             // 超时计时器指针
@@ -98,6 +102,9 @@ class JudgeEngine : public QObject
 
     // 内部辅助函数：读取进程输出并检查是否超出 16 MiB 上限
     void collectOutput(bool fromStderr);
+
+    // 内部辅助函数：区分工具链组件缺失/异常与正常源码编译错误 CE
+    bool isToolchainFailure(const std::string &compilerOutput) const;
 };
 
 #endif

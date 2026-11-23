@@ -18,6 +18,7 @@ JudgeEngine::JudgeEngine(string compilerPath, QObject *parent)
 {
     // 在构造函数体内用普通赋值初始化成员变量（与 CompilerChecker 写法一致）
     compilerPath_ = compilerPath;
+    compileTimeoutMs_ = 30000;
     stage_ = STAGE_IDLE;
     workDir_ = nullptr;
     currentIndex_ = 0;
@@ -66,6 +67,14 @@ JudgeEngine::~JudgeEngine()
 bool JudgeEngine::isBusy() const
 {
     return stage_ != STAGE_IDLE;
+}
+
+void JudgeEngine::setCompileTimeoutMs(int timeoutMs)
+{
+    if (timeoutMs > 0)
+    {
+        compileTimeoutMs_ = timeoutMs;
+    }
 }
 
 JudgeResult JudgeEngine::getResult()
@@ -136,22 +145,28 @@ bool JudgeEngine::startJudge(Problem problem, string sourcePath, vector<TestCase
         return false;
     }
 
-    // 7. 创建 work 父目录
+    // 7. 创建并检查 work 父目录是否可写
     QString workRoot = QDir(QCoreApplication::applicationDirPath()).filePath("work");
 
     if (!QDir().mkpath(workRoot))
     {
-        error = "无法创建工作目录";
+        error = "无法创建或写入工作目录，请将软件放到普通用户可写的英文目录";
         return false;
     }
 
-    // 8. 为本次判题创建唯一临时目录（用普通指针 + new 创建）
+    // 8. 为本次判题创建唯一临时目录（用普通指针 + new 创建，同时校验目录可写性）
     QTemporaryDir *tempDir = new QTemporaryDir(QDir(workRoot).filePath("judge-XXXXXX"));
 
     if (!tempDir->isValid())
     {
+        QString reason = tempDir->errorString();
         delete tempDir; // 创建失败也要及时释放内存，防止泄漏
-        error = "无法创建临时目录";
+        error = "工作目录不可写或无法创建临时目录";
+        if (!reason.isEmpty())
+        {
+            error += "（" + reason.toUtf8().toStdString() + "）";
+        }
+        error += "，请将软件放到普通用户可写的英文目录";
         return false;
     }
 
@@ -249,9 +264,9 @@ void JudgeEngine::startCompile()
     args << "-o";
     args << "main.exe";
 
-    // 记录本次定时器所属步骤编号，编译最多等待 30 秒
+    // 记录本次定时器所属步骤编号，默认编译最多等待 30 秒（可通过 setCompileTimeoutMs 调整）
     timerStepId_ = stepId_;
-    timer_->start(30000);
+    timer_->start(compileTimeoutMs_);
 
     // 异步启动g++
     process_->start(compilerPath, args);
@@ -296,8 +311,15 @@ void JudgeEngine::startRun()
     runtimeError_.clear();
     runClock_.invalidate();
 
-    // 4. 设置工作目录
+    // 4. 设置工作目录，并把工具链 bin 目录放到 PATH 最前面，
+    //    确保在无系统 g++ 的电脑上运行 main.exe 时也能找到配套运行时 DLL
     process_->setWorkingDirectory(workDir_->path());
+
+    QString compilerPath = QString::fromUtf8(compilerPath_.c_str());
+    QString compilerBin = QFileInfo(compilerPath).absolutePath();
+    QProcessEnvironment runEnv = QProcessEnvironment::systemEnvironment();
+    runEnv.insert("PATH", compilerBin + QDir::listSeparator() + runEnv.value("PATH"));
+    process_->setProcessEnvironment(runEnv);
 
     // 5. 分别收集标准输出和错误输出
     process_->setProcessChannelMode(QProcess::SeparateChannels);
@@ -365,6 +387,7 @@ void JudgeEngine::terminateCompileTree()
     // 在父进程还未被杀死前获取其有效 PID，避免 PID 失效后找不到子进程
     long long pid = (long long)process_->processId();
     bool taskkillOk = false;
+    string killDetail;
 
     if (pid > 0)
     {
@@ -373,18 +396,44 @@ void JudgeEngine::terminateCompileTree()
         killArgs << "/PID" << QString::number(pid) << "/T" << "/F";
         killer.start("taskkill", killArgs);
 
-        if (killer.waitForFinished(3000) &&
-            killer.exitStatus() == QProcess::NormalExit &&
-            killer.exitCode() == 0)
+        if (killer.waitForFinished(5000))
         {
-            taskkillOk = true;
+            if (killer.exitStatus() == QProcess::NormalExit && killer.exitCode() == 0)
+            {
+                taskkillOk = true;
+            }
+            else
+            {
+                string errText = QString::fromLocal8Bit(killer.readAllStandardError()).trimmed().toStdString();
+                string outText = QString::fromLocal8Bit(killer.readAllStandardOutput()).trimmed().toStdString();
+                killDetail = "exitCode=" + to_string(killer.exitCode());
+                if (!errText.empty())
+                    killDetail += ", " + errText;
+                else if (!outText.empty())
+                    killDetail += ", " + outText;
+            }
         }
+        else
+        {
+            killDetail = "taskkill执行超时或启动失败: " + killer.errorString().toUtf8().toStdString();
+            if (killer.state() != QProcess::NotRunning)
+            {
+                killer.kill();
+                killer.waitForFinished(500);
+            }
+        }
+    }
+    else
+    {
+        killDetail = "无法获取编译器PID";
     }
 
     // 如果 taskkill 未成功且编译器仍在运行，记下清理错误并兜底调用 kill()
     if (!taskkillOk && process_->state() != QProcess::NotRunning)
     {
         cleanupError_ = "编译超时，清理编译器进程树失败";
+        if (!killDetail.empty())
+            cleanupError_ += "（" + killDetail + "）";
         process_->kill();
     }
 }
@@ -415,7 +464,14 @@ void JudgeEngine::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatu
         if (timedOut_)
         {
             result_.status = "InternalError";
-            result_.error = "编译超时（超过 30 秒）";
+            if (compileTimeoutMs_ >= 1000 && compileTimeoutMs_ % 1000 == 0)
+            {
+                result_.error = "编译超时（超过 " + to_string(compileTimeoutMs_ / 1000) + " 秒）";
+            }
+            else
+            {
+                result_.error = "编译超时（超过 " + to_string(compileTimeoutMs_) + " 毫秒）";
+            }
         }
         else if (outputLimitExceeded_)
         {
@@ -434,9 +490,17 @@ void JudgeEngine::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatu
         }
         else if (exitCode != 0)
         {
-            // 只有编译器正常退出且返回非 0 退出码，才判定为源码编译错误 CE
-            result_.status = "CE";
-            result_.error = "编译失败";
+            if (isToolchainFailure(result_.compilerOutput))
+            {
+                result_.status = "InternalError";
+                result_.error = "工具链运行异常或组件缺失，请检查编译器目录是否完整";
+            }
+            else
+            {
+                // 只有编译器正常退出、返回非 0 退出码且非工具链故障时，才判定为源码编译错误 CE
+                result_.status = "CE";
+                result_.error = "编译失败";
+            }
         }
         else if (!QFileInfo(exePath).isFile())
         {
@@ -751,4 +815,48 @@ void JudgeEngine::collectOutput(bool fromStderr)
     }
 
     target->append(data);
+}
+
+bool JudgeEngine::isToolchainFailure(const string &compilerOutput) const
+{
+    // 1. 先检查编译器输出是否全为空白：正常源码编译错误一定会有诊断文字；
+    // 若非零退出却没有任何输出，通常是缺 DLL 或系统环境异常。
+    bool hasVisibleChar = false;
+    for (size_t i = 0; i < compilerOutput.size(); ++i)
+    {
+        char ch = compilerOutput[i];
+        if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n')
+        {
+            hasVisibleChar = true;
+            break;
+        }
+    }
+    if (!hasVisibleChar)
+    {
+        return true;
+    }
+
+    // 2. 检查是否包含工具链内部子程序缺失、启动失败或编译器崩溃的典型字样
+    const char *patterns[] = {
+        "cannot execute",
+        "cannot exec",
+        "CreateProcess",
+        "installation problem",
+        "error trying to exec",
+        "cannot find 'ld'",
+        "cannot find 'as'",
+        "cannot find 'cc1plus'",
+        "internal compiler error"
+    };
+    const int patternCount = (int)(sizeof(patterns) / sizeof(patterns[0]));
+
+    for (int i = 0; i < patternCount; ++i)
+    {
+        if (compilerOutput.find(patterns[i]) != string::npos)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
