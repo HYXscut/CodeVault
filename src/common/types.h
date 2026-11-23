@@ -65,4 +65,11 @@ struct Progress // 保存一个用户对一道题的最近练习记录。
     std::string lastOpenedTime; // 最近打开时间，尚未记录时为空
     std::string lastJudgedTime; // 最近有效判题时间，尚未判题时为空
 };
+struct ProblemQuery // 查询条件；空文本不限，status 为 -1 时不限状态。
+{
+    std::string titleKeyword;
+    std::string tag;
+    std::string packageId;
+    int status = -1;
+};
 #endif

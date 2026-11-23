@@ -1,5 +1,9 @@
 #include "problem/problem_library.h"
 
+#include <QFile>
+#include <QFileInfo>
+#include <QSaveFile>
+#include <QString>
 #include <algorithm>
 #include <charconv>
 #include <filesystem>
@@ -697,6 +701,7 @@ bool ProblemLibrary::load(std::string& error)
 // 参数 error：失败时输出原因，成功时清空。
 // 返回值：全部正式题包加载成功返回 true，否则返回 false。
 // 步骤：准备目录；收集正式题包目录并排序；逐个解析并检查编号；将题目先放入局部集合，全部通过后才替换 problems_。
+    loaded_ = false; // 本次加载失败后禁止继续修改题库。
     const fs::path packagesPath =
         fs::u8path(packagesDir_);
 
@@ -802,7 +807,42 @@ bool ProblemLibrary::load(std::string& error)
             packageProblems.end());
     }
 
-    // 所有题包均成功后，才替换原题库。
+    std::vector<std::string> removed;
+    const fs::path markerPath = packagesPath.parent_path() / "removed_packages.txt";
+    QFile marker(QString::fromUtf8(pathToUtf8(markerPath).c_str()));
+    if (QFileInfo::exists(marker.fileName()))
+    {
+        if (!marker.open(QIODevice::ReadOnly))
+        {
+            error = "无法读取题包隐藏标记：" + marker.errorString().toUtf8().toStdString();
+            return false;
+        }
+        const QByteArray bytes = marker.readAll();
+        if (marker.error() != QFileDevice::NoError)
+        {
+            error = "读取题包隐藏标记失败";
+            return false;
+        }
+        std::istringstream input(bytes.toStdString());
+        std::string id;
+        while (std::getline(input, id))
+        {
+            if (!id.empty() && id.back() == '\r') id.pop_back();
+            if (id.empty()) continue; // 兼容旧窗口保存的逐行编号格式和空行。
+            if (!isValidId(id) || loadedPackageIds.count(id) == 0)
+            {
+                error = "隐藏标记含非法或未知题包编号：" + id;
+                return false;
+            }
+            for (const std::string& old : removed)
+            {
+                if (old == id) { error = "隐藏标记编号重复：" + id; return false; }
+            }
+            removed.push_back(id);
+        }
+    }
+    removedPackageIds_ = removed;
+    // 所有题包与标记均成功后，才替换原题库。
     problems_ = std::move(loadedProblems);
     loaded_ = true;
 
@@ -838,6 +878,51 @@ bool ProblemLibrary::importPackage(
             error))
     {
         return false;
+    }
+
+    if (isRemoved(packageId))
+    {
+        const fs::path cached = fs::u8path(packagesDir_) / fs::u8path(packageId);
+        std::string cachedId;
+        std::vector<Problem> cachedProblems;
+        if (!parsePackageFolder(cached, cachedId, cachedProblems, error)) return false;
+        std::vector<std::string> files;
+        files.push_back("package.txt");
+        for (const Problem& problem : sourceProblems)
+        {
+            files.push_back(problem.problemId + "/statement.md");
+            for (int i = 1; i <= problem.testCount; ++i)
+            {
+                files.push_back(problem.problemId + "/" + std::to_string(i) + ".in");
+                files.push_back(problem.problemId + "/" + std::to_string(i) + ".out");
+            }
+        }
+        for (const std::string& name : files)
+        {
+            QFile incoming(QString::fromUtf8(pathToUtf8(sourceFolder / fs::u8path(name)).c_str()));
+            QFile original(QString::fromUtf8(pathToUtf8(cached / fs::u8path(name)).c_str()));
+            if (!incoming.open(QIODevice::ReadOnly) || !original.open(QIODevice::ReadOnly))
+            {
+                error = "恢复题包时无法读取文件：" + name;
+                return false;
+            }
+            while (!incoming.atEnd() || !original.atEnd())
+            {
+                const QByteArray a = incoming.read(65536);
+                const QByteArray b = original.read(65536); // 分块逐字节比较，保留 BOM 和换行差异。
+                if (incoming.error() != QFileDevice::NoError || original.error() != QFileDevice::NoError)
+                { error = "恢复题包时读取失败：" + name; return false; }
+                if (a != b)
+                { error = "同 ID 题包内容有变化，请使用新 ID：" + name; return false; }
+            }
+        }
+        std::vector<std::string> candidate;
+        for (const std::string& id : removedPackageIds_)
+            if (id != packageId) candidate.push_back(id);
+        if (!saveRemoved(candidate, error)) return false;
+        removedPackageIds_ = candidate; // 只取消隐藏，不覆盖缓存、不修改任何账号进度。
+        error.clear();
+        return true;
     }
 
     for (const Problem& problem : problems_)
@@ -1014,7 +1099,11 @@ std::vector<Problem> ProblemLibrary::getProblems()
 // 返回当前全部题目的副本。
 // 参数：无；返回值：题目 vector 的副本。
 // 实现：直接返回 problems_，由 vector 的复制操作构造返回值。
-    return problems_;
+    std::vector<Problem> visible;
+    if (!loaded_) return visible;
+    for (const Problem& problem : problems_)
+        if (!isRemoved(problem.packageId)) visible.push_back(problem);
+    return visible;
 }
 
 bool ProblemLibrary::findProblem(
@@ -1027,9 +1116,10 @@ bool ProblemLibrary::findProblem(
 // 参数 packageId/problemId：目标的两个编号；result：成功时输出题目副本；error：失败时输出原因，成功时清空。
 // 返回值：找到返回 true，未找到返回 false。
 // 实现：顺序遍历题目集合；两个编号同时匹配时才写入 result。
+    if (!loaded_) { error = "题库未成功加载"; return false; }
     for (const Problem& problem : problems_)
     {
-        if (problem.packageId == packageId &&
+        if (!isRemoved(problem.packageId) && problem.packageId == packageId &&
             problem.problemId == problemId)
         {
             result = problem;// 只有两个编号同时匹配才修改 result；查找失败时保留其原值。
@@ -1137,3 +1227,68 @@ bool ProblemLibrary::getTestCase(
     return true; // 本次读取成功
 }
 
+
+bool ProblemLibrary::isRemoved(const std::string& packageId) const
+{
+    for (const std::string& id : removedPackageIds_) // 按编号查找，避免依赖题目行号。
+        if (id == packageId) return true;
+    return false;
+}
+
+bool ProblemLibrary::saveRemoved(const std::vector<std::string>& candidate, std::string& error)
+{
+    const fs::path path = fs::u8path(packagesDir_).parent_path() / "removed_packages.txt";
+    QSaveFile output(QString::fromUtf8(pathToUtf8(path).c_str())); // Qt 仅负责可靠文件提交。
+    output.setDirectWriteFallback(false); // 禁止退回直接覆盖，保证失败时旧文件仍在。
+    if (!output.open(QIODevice::WriteOnly))
+    { error = "无法保存隐藏标记：" + output.errorString().toUtf8().toStdString(); return false; }
+    std::string text;
+    for (const std::string& id : candidate) text += id + "\n";
+    const QByteArray bytes = QByteArray::fromStdString(text);
+    if (output.write(bytes) != bytes.size())
+    { error = "隐藏标记写入失败"; output.cancelWriting(); return false; }
+    if (!output.commit())
+    { error = "隐藏标记提交失败：" + output.errorString().toUtf8().toStdString(); return false; }
+    error.clear();
+    return true;
+}
+
+bool ProblemLibrary::removePackageFromLibrary(std::string packageId, std::string& error)
+{
+    if (!loaded_) { error = "题库未成功加载"; return false; }
+    bool found = false;
+    for (const Problem& problem : problems_)
+        if (problem.packageId == packageId) found = true;
+    if (!found || isRemoved(packageId)) { error = "题包不存在或已经隐藏：" + packageId; return false; }
+    std::vector<std::string> candidate = removedPackageIds_;
+    candidate.push_back(packageId); // 在副本上操作，保存失败不影响当前可见性。
+    if (!saveRemoved(candidate, error)) return false;
+    removedPackageIds_ = candidate;
+    return true;
+}
+
+std::vector<Problem> ProblemLibrary::searchProblems(const ProblemQuery& query,
+    const std::vector<Progress>& currentUserProgress)
+{
+    std::vector<Problem> result;
+    if (!loaded_) return result;
+    for (const Problem& problem : problems_)
+    {
+        if (isRemoved(problem.packageId)) continue;
+        if (!query.packageId.empty() && query.packageId != problem.packageId) continue;
+        if (!query.titleKeyword.empty() && problem.title.find(query.titleKeyword) == std::string::npos) continue;
+        bool tagMatches = query.tag.empty();
+        for (const std::string& tag : problem.tags)
+            if (tag == query.tag) tagMatches = true;
+        if (!tagMatches) continue;
+        int status = ProgressNotStarted; // 无进度时视为未开始。
+        for (const Progress& progress : currentUserProgress)
+        {
+            if (progress.packageId == problem.packageId && progress.problemId == problem.problemId)
+            { status = progress.status; break; } // 题号相同但题包不同，不能串进度。
+        }
+        if (query.status != -1 && query.status != status) continue;
+        result.push_back(problem); // 所有条件同时满足才复制到结果集合。
+    }
+    return result;
+}

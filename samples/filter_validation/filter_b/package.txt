@@ -1,0 +1,129 @@
+CJPKG1
+filter_b
+Filter fixture
+25
+P001
+Array 1
+array;basic
+1000
+1
+P002
+Loop 2
+loop;basic
+1000
+1
+P003
+Array 3
+array;basic
+1000
+1
+P004
+Loop 4
+loop;basic
+1000
+1
+P005
+Array 5
+array;basic
+1000
+1
+P006
+Loop 6
+loop;basic
+1000
+1
+P007
+Array 7
+array;basic
+1000
+1
+P008
+Loop 8
+loop;basic
+1000
+1
+P009
+Array 9
+array;basic
+1000
+1
+P010
+Loop 10
+loop;basic
+1000
+1
+P011
+Array 11
+array;basic
+1000
+1
+P012
+Loop 12
+loop;basic
+1000
+1
+P013
+Array 13
+array;basic
+1000
+1
+P014
+Loop 14
+loop;basic
+1000
+1
+P015
+Array 15
+array;basic
+1000
+1
+P016
+Loop 16
+loop;basic
+1000
+1
+P017
+Array 17
+array;basic
+1000
+1
+P018
+Loop 18
+loop;basic
+1000
+1
+P019
+Array 19
+array;basic
+1000
+1
+P020
+Loop 20
+loop;basic
+1000
+1
+P021
+Array 21
+array;basic
+1000
+1
+P022
+Loop 22
+loop;basic
+1000
+1
+P023
+Array 23
+array;basic
+1000
+1
+P024
+Loop 24
+loop;basic
+1000
+1
+P025
+Array 25
+array;basic
+1000
+1

@@ -136,6 +136,8 @@ LoginDialog::LoginDialog(QWidget *parent) :
 
     // 将密码输入框设置为隐藏字符显示
     ui->passwordEdit->setEchoMode(QLineEdit::Password);
+    ui->confirmPasswordEdit->setEchoMode(QLineEdit::Password);
+    setRegisterMode(false);
 
     // 窗口打开后自动聚焦用户名输入框
     ui->usernameEdit->setFocus();
@@ -155,7 +157,7 @@ LoginDialog::~LoginDialog()
 // 返回用户输入的用户名
 QString LoginDialog::userId() const
 {
-    return ui->usernameEdit->text().trimmed(); // 去除用户名首尾空格
+    return ui->usernameEdit->text(); // 原样校验，首尾空格也属于非法字符
 }
 
 // 返回用户输入的密码
@@ -167,6 +169,7 @@ QString LoginDialog::password() const
 // 处理登录按钮点击
 void LoginDialog::onLoginClicked()
 {
+    if (registerMode_) { setRegisterMode(false); return; } // 注册时该按钮用于返回登录。
     // 检查用户名是否为空
     if (userId().isEmpty())
     {
@@ -188,6 +191,7 @@ void LoginDialog::onLoginClicked()
 // 处理注册按钮点击
 void LoginDialog::onRegisterClicked()
 {
+    if (!registerMode_) { setRegisterMode(true); return; } // 首次点击先展开确认密码字段。
     // 检查注册用户名是否为空
     if (userId().isEmpty())
     {
@@ -203,6 +207,13 @@ void LoginDialog::onRegisterClicked()
         return; // 停止本次注册
     }
 
+    if (password() != ui->confirmPasswordEdit->text())
+    {
+        ui->messageLabel->setText(QStringLiteral("两次密码不一致"));
+        ui->confirmPasswordEdit->setFocus();
+        return;
+    }
+
     // 使用对话框属性通知主窗口执行注册流程
     setProperty("registerRequested", true);
 
@@ -214,4 +225,18 @@ void LoginDialog::onRegisterClicked()
 void LoginDialog::onCancelClicked()
 {
     reject(); // 关闭对话框并返回 Rejected
+}
+void LoginDialog::setRegisterMode(bool enabled)
+{
+    registerMode_ = enabled;
+    ui->confirmPasswordLabel->setVisible(enabled);
+    ui->confirmPasswordEdit->setVisible(enabled);
+    ui->confirmPasswordEdit->clear();
+    ui->messageLabel->clear();
+    ui->titleLabel->setText(enabled ? QStringLiteral("注册账号") : QStringLiteral("账号登录"));
+    ui->descriptionLabel->setText(enabled ? QStringLiteral("用户名须为 3～20 位字母、数字或下划线") : QStringLiteral("登录以管理和运行本地评测任务"));
+    ui->descriptionLabel->setWordWrap(true);
+    ui->registerButton->setText(enabled ? QStringLiteral("确认注册") : QStringLiteral("注册"));
+    ui->loginButton->setText(enabled ? QStringLiteral("返回登录") : QStringLiteral("登录"));
+    setProperty("registerRequested", false);
 }

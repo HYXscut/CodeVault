@@ -40,6 +40,23 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
+    ui->problemTable->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn); // 底部始终保留横向滚动条。
+    ui->problemTable->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel); // 按像素平滑滚动。
+    ui->problemTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive); // 用户仍可拖动表头调整列宽。
+    ui->problemTable->horizontalHeader()->setStretchLastSection(false); // 保留实际列宽，超出视口时由滚动条访问。
+    ui->problemTable->horizontalHeader()->setMinimumSectionSize(70);
+    ui->problemTable->setColumnWidth(0, 110); // 题包列。
+    ui->problemTable->setColumnWidth(1, 80); // 题号列。
+    ui->problemTable->setColumnWidth(2, 220); // 标题列预留更多空间。
+    ui->problemTable->setColumnWidth(3, 110); // 状态列。
+    ui->problemTable->setStyleSheet(R"(
+        QScrollBar:horizontal { height: 14px; background: #e5eaf1; margin: 0px; border-radius: 6px; }
+        QScrollBar::handle:horizontal { background: #8aa4c8; min-width: 28px; border-radius: 6px; }
+        QScrollBar::handle:horizontal:hover { background: #527bb4; }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; height: 0px; }
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
+    )"); // 样式仅作用于题目表格的横向滚动条，使滑块容易辨认。
+
         ui->problemTable->verticalHeader()->hide(); // 隐藏题目列表左侧的行号表头
     ui->pointResultTable->verticalHeader()->hide(); // 隐藏逐点结果表左侧行号和左上角黑块
     ui->pointResultTable->setColumnCount(4);//设置测试点结果表的列数
@@ -72,10 +89,6 @@ MainWindow::MainWindow(QWidget *parent)
     const QString progressPath=QDir(appDir).filePath("data/progress.txt"); // 进度文件路径
 
     const QString accountPath = QDir(appDir).filePath( "data/accounts.txt"); // 保存账号文件路径
-
-    removedPackagesPath_ = QDir(appDir).filePath("data/removed_packages.txt"); // 保存隐藏题包记录路径
-
-    loadRemovedPackages(removedPackagesPath_); // 程序启动时恢复隐藏题包
 
     library_=new ProblemLibrary(packagesDir.toStdString());
 
@@ -158,6 +171,12 @@ MainWindow::MainWindow(QWidget *parent)
     // 连接移除题包按钮
     connect(ui->removePackageButton,&QPushButton::clicked,this,&MainWindow::removeSelectedPackage);
 
+    std::string libraryError;
+    if (!library_->load(libraryError))
+    {
+        QMessageBox::critical(this, QStringLiteral("题库加载失败"), QString::fromUtf8(libraryError.c_str()));
+        return;
+    }
     refreshProblems();
 
     startupReady_ = true; // 登录成功并完成主窗口初始化
@@ -173,86 +192,10 @@ bool MainWindow::isStartupReady() const
     return startupReady_; // 返回启动状态
 }
 
-bool MainWindow::loadRemovedPackages(const QString& filePath)
-{
-    // 打开隐藏题包记录文件
-    QFile file(filePath);
-
-    // 文件不存在时视为空记录
-    if (!file.exists())
-    {
-        return true;
-    }
-
-    // 尝试以文本方式打开文件
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        return false;
-    }
-
-    // 逐行读取隐藏题包编号
-    QTextStream input(&file);
-
-    while (!input.atEnd())
-    {
-        const QString packageId = input.readLine().trimmed();
-
-        // 空行不加入隐藏集合
-        if (!packageId.isEmpty())
-        {
-            removedPackageIds_.insert(packageId);
-        }
-    }
-
-    return true;
-}
-
-bool MainWindow::saveRemovedPackages(const QString& filePath) const
-{
-    // 创建保存目录
-    QFileInfo fileInfo(filePath);
-    QDir().mkpath(fileInfo.absolutePath());
-
-    // 以覆盖方式打开隐藏题包记录文件
-    QFile file(filePath);
-
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-    {
-        return false;
-    }
-
-    // 逐行写入隐藏题包编号
-    QTextStream output(&file);
-
-    for (const QString& packageId : removedPackageIds_)
-    {
-        output << packageId << '\n';
-    }
-
-    return true;
-}
-
-QString MainWindow::packageIdFromFolder(const QString& folder) const
-{
-    // 拼接题包元数据文件路径
-    QFile file(QDir(folder).filePath("package.txt"));
-
-    // 打开题包元数据文件
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        return QString();
-    }
-
-    // 跳过格式标识行
-    QTextStream input(&file);
-    input.readLine();
-
-    // 读取题包编号行
-    return input.readLine().trimmed();
-}
-
 void MainWindow::refreshProblems()//函数作用：刷新题目列表
 {
+    if (judgeEngine_->isBusy()) return; // 判题中禁止修改当前绑定及题库。
+
     std::string error;//保存题库加载失败时的错误信息
 
     if(!library_->load(error))//尝试加载已保存的题目
@@ -266,7 +209,15 @@ void MainWindow::refreshProblems()//函数作用：刷新题目列表
         return;
     }
 
-    const std::vector<Problem> problems = library_->getProblems(); // 获取全部题目
+    ProblemQuery query; // 窗口只转换控件条件，筛选规则统一交给 A 的题库模块。
+    query.titleKeyword = titleFilter_.toUtf8().toStdString();
+    if (tagFilter_ != QStringLiteral("全部标签")) query.tag = tagFilter_.toUtf8().toStdString();
+    if (packageFilter_ != QStringLiteral("全部题包")) query.packageId = packageFilter_.toUtf8().toStdString();
+    if (statusFilter_ == QStringLiteral("未开始")) query.status = ProgressNotStarted;
+    if (statusFilter_ == QStringLiteral("练习中")) query.status = ProgressInProgress;
+    if (statusFilter_ == QStringLiteral("本地通过")) query.status = ProgressLocalAccepted;
+    const std::vector<Problem> problems = library_->searchProblems(
+        query, progressStore_->getUserProgress(userId_.toUtf8().toStdString()));
 
     ui->problemTable->setRowCount(0); // 清空旧的显示结果
 
@@ -274,18 +225,6 @@ void MainWindow::refreshProblems()//函数作用：刷新题目列表
 
     for (const Problem& problem : problems) // 遍历全部题目
     {
-        // 判断题包是否已隐藏
-        if (removedPackageIds_.contains(QString::fromUtf8(problem.packageId.c_str())))
-        {
-            // 隐藏已移除题包中的题目
-            continue;
-        }
-
-        if (!matchesFilters(problem)) // 判断当前题目是否符合筛选条件
-        {
-            continue; // 不符合条件时跳过当前题目
-        }
-
         ui->problemTable->insertRow(displayRow); // 为匹配题目增加一行
 
         auto* packageItem = new QTableWidgetItem( // 创建题包编号单元格
@@ -368,30 +307,13 @@ void MainWindow::refreshProblems()//函数作用：刷新题目列表
 
 void MainWindow::importPackage()//函数作用：导入题包
 {
+    if (judgeEngine_->isBusy()) return; // 判题中禁止更改共享题库和筛选。
+
     const QString folder=QFileDialog::getExistingDirectory(this,QStringLiteral("选择题包目录"));
     //保存用户选择的题包目录并打开文件夹选择对话框
 
     if(folder.isEmpty())
     {
-        return;
-    }
-
-    // 读取外部题包编号，用于恢复被隐藏的题包
-    const QString packageId = packageIdFromFolder(folder);
-
-    // 相同题包已经保存在本地时，重新导入表示恢复显示
-    if (!packageId.isEmpty() && removedPackageIds_.contains(packageId))
-    {
-        removedPackageIds_.remove(packageId);
-
-        if (!saveRemovedPackages(removedPackagesPath_))
-        {
-            ui->statusLabel->setText(QStringLiteral("无法保存题包显示状态"));
-            return;
-        }
-
-        refreshProblems();
-        ui->statusLabel->setText(QStringLiteral("题包已恢复显示"));
         return;
     }
 
@@ -403,8 +325,9 @@ void MainWindow::importPackage()//函数作用：导入题包
 
     if(!success)
     {
-        //导入失败显示错误
-        ui->statusLabel->setText(QString::fromUtf8(error.c_str()));
+        const QString reason = QString::fromUtf8(error.c_str());
+        ui->statusLabel->setText(reason); // 底部保留原因，关闭弹窗后仍可查看。
+        QMessageBox::warning(this, QStringLiteral("导入失败"), reason); // 明确显示拒绝原因及具体文件，避免状态栏不易察觉。
         return;
     }
 
@@ -487,7 +410,7 @@ void MainWindow::showSelectedProblems(int row,int column)//函数作用：点击
 
     else//判断源码路径依然有效
     {
-        ui->statusLabel->setText(QString::fromUtf8(currentProgress_.lastSummary.c_str()));
+        ui->statusLabel->setText(QStringLiteral("%1 的最近结果：%2").arg(currentUserId_, QString::fromUtf8(currentProgress_.lastSummary.c_str())));
     }
 
         ui->judgeButton->setEnabled(
@@ -529,6 +452,8 @@ void MainWindow::onCompilerCheckFinished()
 
 void MainWindow::chooseSource()
 {
+    if (judgeEngine_->isBusy()) return; // 判题中禁止修改当前绑定及题库。
+
     const QString filePath=QFileDialog::getOpenFileName(this,QStringLiteral("选择C++源码"),QString(),QStringLiteral("C++源码(*.cpp)"));// 保存用户选择的文件路径
     if(filePath.isEmpty())// 判断用户是否取消选择
     {
@@ -583,6 +508,15 @@ void MainWindow::chooseSource()
 
 void MainWindow::startJudge()
 {
+    const std::string sessionId = accountManager_->currentUserId();
+    if (!accountManager_->isLoggedIn() || userId_.toUtf8().toStdString() != sessionId ||
+        currentProgress_.userId != sessionId)
+    {
+        ui->resultLabel->setText(QStringLiteral("账号身份不一致，未启动判题"));
+        ui->statusLabel->setText(QStringLiteral("请退出后重新登录并选择题目；本次没有修改进度"));
+        return; // 账号、窗口和所选记录必须属于同一身份，不能把结果写给其他用户。
+    }
+
     if(!hasSelectedProblem_)//检查是否已经选择题目
     {
         ui->statusLabel->setText(QStringLiteral("请先选择题目"));
@@ -648,6 +582,12 @@ void MainWindow::startJudge()
         tests.push_back(testCase); // 将当前测试点加入完整列表
     }
 
+    judgingProgress_ = currentProgress_; // 保存任务身份，完成回调不依赖可变的控件。
+    judgingProgress_.userId = userId_.toUtf8().toStdString();
+    judgingProgress_.packageId = currentProblem_.packageId;
+    judgingProgress_.problemId = currentProblem_.problemId;
+    judgingProgress_.sourcePath = sourcePath_.toUtf8().toStdString();
+
     const bool accepted=judgeEngine_->startJudge(currentProblem_,sourcePath_.toStdString(),tests,error);
 
     if (!accepted) // 请求未被接受，没有启动判题任务
@@ -671,6 +611,9 @@ void MainWindow::startJudge()
     ui->checkCompilerButton->setEnabled(false);
     ui->problemTable->setEnabled(false);
     ui->removePackageButton->setEnabled(false);
+    ui->clearSourceButton->setEnabled(false);
+    ui->logoutButton->setEnabled(false);
+    ui->filterButton->setEnabled(false);
 }
 
 void MainWindow::onJudgeFinished()
@@ -721,15 +664,7 @@ void MainWindow::onJudgeFinished()
 
     }
 
-    Progress updatedProgress=currentProgress_;//创建本次判题后的候选进度
-
-    updatedProgress.userId=userId_.toStdString(); //保存当前用户ID
-
-    updatedProgress.packageId=currentProblem_.packageId;//保存题包编号
-
-    updatedProgress.problemId=currentProblem_.problemId;//保存题目编号
-
-    updatedProgress.sourcePath=sourcePath_.toStdString();//保存用户源码路径
+    Progress updatedProgress=judgingProgress_; // 使用发起任务时锁定的账号、题目和源码副本。
 
     if(result.status=="AC")//判断测试点是否全部通过
     {
@@ -767,7 +702,7 @@ void MainWindow::onJudgeFinished()
         currentProgress_ = updatedProgress; // 只有保存成功才更新当前内存记录
     }
 
-    ui->resultLabel->setText(QString::fromUtf8(result.status.c_str()));
+    ui->resultLabel->setText(QStringLiteral("%1：%2").arg(currentUserId_, QString::fromUtf8(result.status.c_str()))); // 显示结果所属账号。
 
     const std::string outputPreview =
         result.actualOutput.substr(0, 4096); // 最多取前 4096 字节供界面显示
@@ -823,6 +758,12 @@ void MainWindow::onJudgeFinished()
     ui->checkCompilerButton->setEnabled(true);
     ui->problemTable->setEnabled(true);
     ui->removePackageButton->setEnabled(hasSelectedProblem_);
+    ui->clearSourceButton->setEnabled(true);
+    ui->logoutButton->setEnabled(true);
+    ui->filterButton->setEnabled(true);
+    const QString completionMessage = ui->statusLabel->text();
+    refreshProblems(); // 保存后立即更新列表中的当前账号状态及筛选结果。
+    ui->statusLabel->setText(completionMessage);
 
 }
 
@@ -839,6 +780,8 @@ void MainWindow::closeEvent(QCloseEvent* event)
 
 void MainWindow::clearSource()//函数作用：清除源码绑定
 {
+    if (judgeEngine_->isBusy()) return; // 判题中禁止修改当前绑定及题库。
+
     if(!hasSelectedProblem_)//判断当前是否已经选择题目
     {
         ui->statusLabel->setText(QStringLiteral("请先选择题目"));
@@ -881,70 +824,33 @@ void MainWindow::clearSource()//函数作用：清除源码绑定
 // 定义登录流程
 bool MainWindow::showLoginDialog()
 {
-    // 创建登录对话框
-    LoginDialog dialog(this);
-
-    // 显示对话框并等待用户操作
-    if (dialog.exec() != QDialog::Accepted)
+    while (true) // 失败后重新显示窗口，用循环代替递归，避免多次输错不断增加调用层数。
     {
-        // 用户取消时返回失败
-        return false;
-    }
-
-    // 读取用户输入的用户名
-    const QString inputUserId =dialog.userId();
-
-    // 读取用户输入的密码
-    const QString inputPassword =dialog.password();
-
-    // 读取用户是否点击了注册按钮
-    const bool registerRequested =dialog.property("registerRequested").toBool();
-
-    // 保存账号操作错误
-    std::string error;
-
-    // 判断当前是否执行注册操作
-    if (registerRequested)
-    {
-        // 调用账号注册接口
-        const bool registered =accountManager_->registerAccount(inputUserId.toStdString(),inputPassword.toStdString(),error);
-
-        // 判断注册是否失败
-        if (!registered)
+        LoginDialog dialog(this);
+        if (dialog.exec() != QDialog::Accepted) return false;
+        const QString username = dialog.userId();
+        const std::string password = dialog.password().toUtf8().toStdString();
+        std::string error;
+        if (dialog.property("registerRequested").toBool())
         {
-            // 显示注册失败提示
-            QMessageBox::warning(this,QStringLiteral("注册失败"),QString::fromUtf8(error.c_str()));
-
-            // 注册失败后重新显示登录窗口
-            return showLoginDialog();
+            if (!accountManager_->registerAccount(username.toUtf8().toStdString(), password, error))
+                QMessageBox::warning(this, QStringLiteral("注册失败"), QString::fromUtf8(error.c_str()));
+            else
+                QMessageBox::information(this, QStringLiteral("注册成功"), QStringLiteral("账号已保存，请登录"));
+            continue;
         }
-
-        // 显示注册成功提示
-        QMessageBox::information(this,QStringLiteral("注册成功"),QStringLiteral("账号注册成功，请重新登录"));
-
-        // 注册成功后重新进入登录流程
-        return showLoginDialog();
+        std::string stableId;
+        if (!accountManager_->login(username.toUtf8().toStdString(), password, stableId, error))
+        {
+            QMessageBox::warning(this, QStringLiteral("登录失败"), QString::fromUtf8(error.c_str()));
+            continue;
+        }
+        currentUserId_ = username; // 用户名用于显示。
+        userId_ = QString::fromUtf8(stableId.c_str()); // 内部 ID 用于进度读取和任务归属。
+        setWindowTitle(QStringLiteral("CodeVault — %1").arg(username));
+        ui->brandTitle->setText(QStringLiteral("CodeVault · 当前账号：%1").arg(username)); // 主界面正文也显示身份。
+        return true;
     }
-
-    // 调用账号登录接口
-    const bool loggedIn =accountManager_->login(inputUserId.toStdString(),inputPassword.toStdString(),error);
-
-    // 判断登录是否失败
-    if (!loggedIn)
-    {
-        // 显示登录失败提示
-        QMessageBox::warning(this,QStringLiteral("登录失败"),QString::fromUtf8(error.c_str()));
-
-        // 登录失败后重新显示登录窗口
-        return showLoginDialog();
-    }
-
-    // 保存当前登录用户名
-    currentUserId_ =inputUserId;
-    userId_ =inputUserId;
-
-    // 返回登录成功
-    return true;
 }
 
 // 定义退出账号函数
@@ -975,6 +881,15 @@ void MainWindow::logoutAccount()
 
     // 退出账号管理器中的当前登录状态
     accountManager_->logout();
+    judgingProgress_ = Progress(); // 清空上一账号的任务身份。
+    selectedPackageId_.clear();
+    ui->problemTable->setRowCount(0); // 登录窗口显示期间也不保留上一账号的列表状态。
+    titleFilter_.clear();
+    tagFilter_ = QStringLiteral("全部标签");
+    statusFilter_ = QStringLiteral("全部状态");
+    packageFilter_ = QStringLiteral("全部题包");
+    setWindowTitle(QStringLiteral("CodeVault"));
+    ui->brandTitle->setText(QStringLiteral("CodeVault · 未登录"));
 
     // 清空主窗口中的当前用户
     currentUserId_.clear();
@@ -1021,12 +936,14 @@ void MainWindow::logoutAccount()
     refreshProblems();
 
     // 显示新账号登录成功
-    ui->statusLabel->setText(QStringLiteral("已切换账号"));
+    ui->statusLabel->setText(QStringLiteral("已切换账号：%1").arg(currentUserId_));
 }
 
 // 打开筛选对话框
 void MainWindow::openFilterDialog()
 {
+    if (judgeEngine_->isBusy()) return; // 判题中禁止更改共享题库和筛选。
+
     // 创建筛选对话框
     FilterDialog dialog(this);
 
@@ -1093,103 +1010,10 @@ void MainWindow::openFilterDialog()
     refreshProblems();
 }
 
-// 判断题目是否符合当前筛选条件
-bool MainWindow::matchesFilters(const Problem& problem) const
-{
-    // 判断标题筛选条件是否匹配
-    if (!titleFilter_.isEmpty() &&!titleFilter_.contains(QString::fromUtf8(problem.title.c_str()),Qt::CaseInsensitive))
-    {
-        // 当前题目标题不符合条件
-        return false;
-    }
-
-    // 判断题包筛选条件是否匹配
-    if (packageFilter_ != QStringLiteral("全部题包") &&packageFilter_ != QString::fromUtf8(problem.packageId.c_str()))
-    {
-        // 当前题包不符合条件
-        return false;
-    }
-
-    // 判断标签筛选条件是否匹配
-    if (tagFilter_ != QStringLiteral("全部标签"))
-    {
-        // 保存标签是否匹配
-        bool tagMatched = false;
-
-        // 遍历当前题目的全部标签
-        for (const std::string& tag : problem.tags)
-        {
-            // 判断当前标签是否与筛选条件相同
-            if (tagFilter_ ==QString::fromUtf8(tag.c_str()))
-            {
-                // 标记标签匹配成功
-                tagMatched = true;
-
-                // 停止继续检查标签
-                break;
-            }
-        }
-
-        // 判断是否没有匹配标签
-        if (!tagMatched)
-        {
-            // 当前题目不符合标签条件
-            return false;
-        }
-    }
-
-    // 判断状态筛选条件是否需要检查
-    if (statusFilter_ != QStringLiteral("全部状态"))
-    {
-        // 创建当前题目的进度对象
-        Progress progress;
-
-        // 保存读取进度时的错误
-        std::string error;
-
-        // 读取当前用户的题目进度
-        const bool loaded =progressStore_->getProgress(userId_.toStdString(),problem.packageId,problem.problemId,progress,error);
-
-        // 进度读取失败时视为不匹配
-        if (!loaded)
-        {
-            // 当前题目无法取得状态
-            return false;
-        }
-
-        // 保存当前题目的状态文字
-        QString currentStatus;
-
-        // 判断是否为本地通过
-        if (progress.status == 2)
-        {
-            // 设置本地通过状态
-            currentStatus =QStringLiteral("本地通过");
-        }
-        else if (progress.status == 1)
-        {
-            // 设置练习中状态
-            currentStatus =QStringLiteral("练习中");
-        }
-        else
-        {
-            // 设置未开始状态
-            currentStatus = QStringLiteral("未开始");
-        }
-
-        // 判断状态是否匹配
-        if (currentStatus != statusFilter_)
-        {
-            // 当前题目不符合状态条件
-            return false;
-        }
-    }
-
-    return true;
-}
-
 void MainWindow::removeSelectedPackage()
 {
+    if (judgeEngine_->isBusy()) return; // 判题中禁止更改共享题库和筛选。
+
     // 判断是否已经选择题目
     if (!hasSelectedProblem_)
     {
@@ -1220,15 +1044,18 @@ void MainWindow::removeSelectedPackage()
         return;
     }
 
-    // 保存本次运行中隐藏的题包
-    removedPackageIds_.insert(selectedPackageId_);
-
-    // 将隐藏题包编号写入文件，保证重启后仍然隐藏
-    if (!saveRemovedPackages(removedPackagesPath_))
+    std::string error;
+    if (!library_->removePackageFromLibrary(selectedPackageId_.toUtf8().toStdString(), error))
     {
-        ui->statusLabel->setText(QStringLiteral("无法保存题包隐藏状态"));
-        return;
+        ui->statusLabel->setText(QString::fromUtf8(error.c_str()));
+        return; // 保存失败时保留题面、选择与原可见性。
     }
+    ui->resultLabel->clear();
+    ui->actualOutputText->clear();
+    ui->expectedOutputText->clear();
+    ui->errorOutputText->clear();
+    ui->pointResultTable->setRowCount(0);
+    ui->countLabel->setText(QStringLiteral("通过0，已执行0，总点数0"));
     // 清空当前题目
     currentProblem_ = Problem();
     // 清空当前进度

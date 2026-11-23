@@ -65,7 +65,18 @@ bool getTestCase(
 // 返回值：全部检查和读取成功才返回true，否则返回false；失败不改变result
 // 实现：先找题并检查测试点总数和编号，再读取对应编号的 .in/.out；全部成功后才赋值。
 
+    std::vector<Problem> searchProblems(const ProblemQuery& query,
+        const std::vector<Progress>& currentUserProgress);
+    // 参数为查询条件和当前账号进度副本；所有条件同时满足才返回，保留原 ID。
+    bool removePackageFromLibrary(std::string packageId, std::string& error);
+    // 隐藏共享题包；先原子保存候选标记，成功才更新内存，保留缓存和进度。
+
 private:
+    std::vector<std::string> removedPackageIds_; // 隐藏编号；problems_ 仍保留全部缓存题。
+    bool isRemoved(const std::string& packageId) const; // 顺序查找隐藏标记。
+    bool saveRemoved(const std::vector<std::string>& candidate, std::string& error);
+    // 将候选编号写入 data/removed_packages.txt；失败不修改内存及旧文件。
+
     std::string packagesDir_;
     // 应用保存题包副本的目录路径。
 

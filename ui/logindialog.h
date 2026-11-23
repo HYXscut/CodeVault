@@ -26,6 +26,8 @@ private slots:
 
 private:
     Ui::LoginDialog *ui;
+    bool registerMode_ = false; // 注册模式显示两次密码，登录模式隐藏确认框。
+    void setRegisterMode(bool enabled); // 同步模式、字段可见性和按钮文案。
 };
 
 #endif // LOGINDIALOG_H

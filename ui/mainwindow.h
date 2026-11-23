@@ -4,7 +4,6 @@
 #include <QMainWindow>
 #include <QPushButton>
 #include <QTextEdit>
-#include <QSet>
 #include "problem/problem_library.h"
 #include "compiler/compiler_checker.h"
 #include "judge/judge_engine.h"
@@ -55,6 +54,7 @@ private:
     QString sourcePath_; // 保存当前选择的源码路径
     bool hasSelectedProblem_; // 表示当前是否已经选择题目
     ProgressStore* progressStore_;//保存进度存储对象
+    Progress judgingProgress_; // 发起任务时锁定的进度副本。
     Progress currentProgress_; //保存当前题目的进度
     QString userId_;//保存当前练习用户ID
     AccountManager* accountManager_; // 保存账号管理对象
@@ -65,13 +65,7 @@ private:
     QString tagFilter_;// 保存标签筛选条件
     QString statusFilter_;// 保存状态筛选条件
     QString packageFilter_;// 保存题包筛选条件
-    bool matchesFilters(const Problem& problem) const;// 判断题目是否符合当前筛选条件
-    bool loadRemovedPackages(const QString& filePath); // 从文件加载隐藏题包编号
-    bool saveRemovedPackages(const QString& filePath) const; // 保存隐藏题包编号
-    QString packageIdFromFolder(const QString& folder) const; // 从题包目录读取题包编号
     QString selectedPackageId_; // 保存当前选中的题包编号
-    QSet<QString> removedPackageIds_; // 保存本次运行中隐藏的题包编号
-    QString removedPackagesPath_; // 保存隐藏题包编号的文件路径
 };
 
 #endif // MAINWINDOW_H

@@ -9,7 +9,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
 
 set(PROJECT_SOURCES
     main.cpp
@@ -46,7 +46,7 @@ target_include_directories(CodeVaultUI PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src
 )
 
-target_link_libraries(CodeVaultUI PRIVATE Qt6::Widgets)
+target_link_libraries(CodeVaultUI PRIVATE Qt6::Widgets Qt6::Network)
 
 set_target_properties(CodeVaultUI PROPERTIES
     WIN32_EXECUTABLE TRUE
