@@ -1,0 +1,6 @@
+<RCC>
+ <qresource prefix="/">
+  <file>login_background.svg</file>
+  <file>codevault_icon.svg</file>
+ </qresource>
+</RCC>

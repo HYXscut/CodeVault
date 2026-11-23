@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs><linearGradient id="logoBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#185bd8"/><stop offset="1" stop-color="#5133c7"/></linearGradient></defs>
+  <rect width="64" height="64" rx="14" fill="url(#logoBg)"/>
+  <g transform="translate(10 8) scale(.73)">
+    <path d="M34 0 L60 10 V34 C60 53 47 66 34 73 C21 66 8 53 8 34 V10 Z" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M24 28 L17 36 L24 44 M44 28 L51 36 L44 44 M39 25 L29 48" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

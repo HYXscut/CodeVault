@@ -19,6 +19,7 @@ set(PROJECT_SOURCES
     logindialog.cpp
     logindialog.h
     logindialog.ui
+    login.qrc
     filterdialog.cpp
     filterdialog.h
     filterdialog.ui
