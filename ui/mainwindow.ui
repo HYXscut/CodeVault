@@ -31,7 +31,14 @@ QPushButton:hover { background: #f1f6ff; border-color: #8cb2ef; }
 QPushButton:pressed { background: #e5efff; }
 QPushButton#judgeButton { background: #2468d8; border-color: #2468d8; color: #ffffff; font-weight: 700; }
 QPushButton#judgeButton:hover { background: #1c58ba; }
-QLineEdit, QTextEdit, QTableWidget { background: #ffffff; border: 1px solid #d9e1ea; border-radius: 5px; }
+QLineEdit, QTextEdit, QTableWidget {
+    background: #ffffff;
+    color: #172235;
+    selection-background-color: #2468d8;
+    selection-color: #ffffff;
+    border: 1px solid #d9e1ea;
+    border-radius: 5px;
+}
 QTableWidget { gridline-color: #e6ebf1; }
 QHeaderView::section { background: #f5f7fa; color: #374151; border: 0px; border-bottom: 1px solid #d9e1ea; padding: 7px; font-weight: 600; }
 QLabel#resultLabel { background: #eef3fb; border: 1px solid #d7e1f2; border-radius: 12px; color: #37649d; padding: 4px 12px; }

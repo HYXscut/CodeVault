@@ -375,6 +375,10 @@ void JudgeEngine::finishJudge()
         workDir_ = nullptr;
     }
 
+    result_.passedCount = passedCount_; // 将内部通过数写入返回结果
+    result_.executedCount = executedCount_; // 将实际启动过的点数写入返回结果
+    result_.totalCount = static_cast<int>(tests_.size()); // 保存全部测试点数量
+
     tests_.clear();
     stage_ = STAGE_IDLE;
 

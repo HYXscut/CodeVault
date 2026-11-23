@@ -33,3 +33,37 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Test -Case ALL
 2. **与成员 A 的对接验证**：接入 `samples/week3_demo` 5 点题包及 `ProblemLibrary::getTestCase(..., 1..testCount, ...)` 真实文件读取。
 3. **与成员 C 的共同验收**：在主窗口中完成多点判题显示、`ProgressStore` 持久化保存、重启恢复、原源码失效提示、文件损坏与保存失败处理等全部第三周验收清单。
 4. **极端环境补充测试**：按需补充编译器启动失败/编译超时（`taskkill /PID ... /T /F`）的专项模拟记录。
+
+## 成员 A：week3_demo 真实题包联调预期
+
+题包：samples/week3_demo
+题包 ID：week3_demo
+题目 ID：P001
+测试点数量：5
+每点时限：1000 ms
+
+已完成独立检查：
+- 首次导入成功。
+- 再次运行时从保存副本恢复成功。
+- 题面、时限和测试点数量检查通过。
+- 第 1～5 点输入与标准输出的完整内容检查通过。
+
+以下为正式判题的预期，实际结果均待联调验证。
+
+| 源码（位于 examples） | 总状态 | 第1点 | 第2点 | 第3点 | 第4点 | 第5点 | passedCount | executedCount | totalCount | testIndex |
+|---|---|---|---|---|---|---|---:|---:|---:|---:|
+| answer_multi_ac.cpp | AC | AC | AC | AC | AC | AC | 5 | 5 | 5 | 0 |
+| answer_wa_at3.cpp | WA | AC | AC | WA | NotRun | NotRun | 2 | 3 | 5 | 3 |
+| answer_wa_at1.cpp | WA | WA | NotRun | NotRun | NotRun | NotRun | 0 | 1 | 5 | 1 |
+| answer_re.cpp | RE | RE | NotRun | NotRun | NotRun | NotRun | 0 | 1 | 5 | 1 |
+| answer_tle.cpp | TLE | TLE | NotRun | NotRun | NotRun | NotRun | 0 | 1 | 5 | 1 |
+| answer_output_limit.cpp | OutputLimit | OutputLimit | NotRun | NotRun | NotRun | NotRun | 0 | 1 | 5 | 1 |
+| answer_ce.cpp | CE | NotRun | NotRun | NotRun | NotRun | NotRun | 0 | 0 | 5 | 0 |
+
+补充检查：
+- answer_wa_at3.cpp 在第三点输入 0 7 时输出 8，标准输出为 7。
+- RE 应保留非零退出码 7 和 stderr 信息。
+- CE 应保留编译日志，不启动被测程序。
+- 输出超限应独立显示 OutputLimit。
+- TLE 和输出超限任务结束后，立即运行 AC 样例，确认引擎可以继续使用。
+- 每次任务只发出一次完成通知。

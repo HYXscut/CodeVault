@@ -40,6 +40,8 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
+        ui->problemTable->verticalHeader()->hide(); // 隐藏题目列表左侧的行号表头
+
     ui->pointResultTable->setColumnCount(4);//设置测试点结果表的列数
     ui->pointResultTable->setHorizontalHeaderLabels({
         QStringLiteral("测试点"),
