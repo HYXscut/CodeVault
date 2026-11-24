@@ -19,6 +19,8 @@ CMakeUserPresets.json
 /work/
 /toolchain/
 /data/
+/release_dist/
+*.zip
 
 # C++ 编译、链接产物及部署到本机的运行库
 *.o
