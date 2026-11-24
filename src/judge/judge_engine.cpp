@@ -16,7 +16,8 @@ using namespace std;
 // 构造函数：记下编译器路径 compilerPath，parent 传给基类 QObject。
 // 步骤：把各个状态标志和计数器都初始化一遍，默认编译超时设成 30 秒，
 // 创建 QProcess 和单次触发的 QTimer，并把进程和计时器的 6 个信号都连到对应槽函数。
-JudgeEngine::JudgeEngine(string compilerPath, QObject *parent) : QObject(parent)
+JudgeEngine::JudgeEngine(string compilerPath, QObject *parent)
+    : QObject(parent)
 {
     compilerPath_ = compilerPath;
     compileTimeoutMs_ = 30000;
@@ -214,7 +215,7 @@ bool JudgeEngine::startJudge(Problem problem, string sourcePath, vector<TestCase
     {
         TestPointResult point;
         point.index = tests_[i].index; // 使用测试点的实际编号
-        point.status = "NotRun";       // 初始状态为未执行
+        point.status = "NotRun"; // 初始状态为未执行
         point.executed = false;
 
         result_.pointResults.push_back(point); // 为每个测试点预留记录
@@ -393,8 +394,8 @@ void JudgeEngine::finishJudge()
         workDir_ = nullptr;
     }
 
-    result_.passedCount = passedCount_;                   // 将内部通过数写入返回结果
-    result_.executedCount = executedCount_;               // 将实际启动过的点数写入返回结果
+    result_.passedCount = passedCount_; // 将内部通过数写入返回结果
+    result_.executedCount = executedCount_; // 将实际启动过的点数写入返回结果
     result_.totalCount = static_cast<int>(tests_.size()); // 保存全部测试点数量
 
     tests_.clear();
@@ -618,11 +619,11 @@ void JudgeEngine::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatu
                 pointStatus = "WA";
         }
 
-        TestPointResult &point = result_.pointResults[currentIndex_]; // 引用集合中的当前记录
-        point.status = pointStatus;                                   // 保存本点状态
-        point.elapsedMs = pointElapsedMs;                             // 保存本点耗时
-        point.runtimeError = pointStderr;                             // 保存运行错误说明
-        point.error = result_.error;                                  // 保存本点错误信息
+        TestPointResult& point = result_.pointResults[currentIndex_]; // 引用集合中的当前记录
+        point.status = pointStatus; // 保存本点状态
+        point.elapsedMs = pointElapsedMs; // 保存本点耗时
+        point.runtimeError = pointStderr; // 保存运行错误说明
+        point.error = result_.error; // 保存本点错误信息
 
         // 首错即停：当前点没过就记下该点信息并结束本次判题
         if (pointStatus != "AC")
@@ -698,7 +699,7 @@ void JudgeEngine::onProcessError(QProcess::ProcessError error)
         result_.error += process_->errorString().toUtf8().toStdString();
         if (stage_ == STAGE_RUNNING)
         {
-            TestPointResult &point = result_.pointResults[currentIndex_];
+            TestPointResult& point = result_.pointResults[currentIndex_];
             point.status = "InternalError"; // 被测程序启动失败
             point.error = result_.error;
         }
@@ -886,9 +887,17 @@ bool JudgeEngine::isToolchainFailure(const string &compilerOutput) const
     }
 
     // 第二步：匹配编译器内部组件缺失、无法拉起子程序或内部崩溃的常见英文提示
-    const char *patterns[] = {"cannot execute",       "cannot exec",           "CreateProcess",
-                              "installation problem", "error trying to exec",  "cannot find 'ld'",
-                              "cannot find 'as'",     "cannot find 'cc1plus'", "internal compiler error"};
+    const char *patterns[] = {
+        "cannot execute",
+        "cannot exec",
+        "CreateProcess",
+        "installation problem",
+        "error trying to exec",
+        "cannot find 'ld'",
+        "cannot find 'as'",
+        "cannot find 'cc1plus'",
+        "internal compiler error"
+    };
     const int patternCount = (int)(sizeof(patterns) / sizeof(patterns[0]));
 
     for (int i = 0; i < patternCount; ++i)
