@@ -12,6 +12,7 @@
 | Qt 构建 Kit | Qt 6.12.0（`mingw_64`），CMake 3.30.5，Ninja 1.12.1 |
 | 固定内嵌工具链 | MinGW-W64 GCC **15.1.0**（`x86_64-posix-seh-rev0`，源路径 `D:/Qt/Qt/Tools/mingw1510_64`，含完整 `licenses/`） |
 | 成员 B 交付文档 | [week4-contract.md](week4-contract.md)、[week4-checklist.md](week4-checklist.md)、[toolchain-distribution.md](toolchain-distribution.md)、[judge-module-design.md](judge-module-design.md)、[week5-checklist.md](week5-checklist.md) |
+| 成员 C 交付文档 | [使用说明.md](../使用说明.md)、[gui-account-module.md](gui-account-module.md) |
 | 可复跑测试与准备脚本 | `tests/CMakeLists.txt`、`tests/judge_engine_test.cpp`、`build.ps1`、`tests/prepare-toolchain.ps1` |
 
 ---
@@ -69,3 +70,17 @@
 
 
 补充确认：用户随后明确确认rc4横向滑块可完整查看状态列，以及GUI的CE/RE/TLE/OutputLimit状态计数与异常后AC均符合预期。上述两项由待确认更新为用户手工反馈通过；跨电脑验收仍因暂缺设备保留待办。
+
+---
+
+## 四、2026-11-24 成员 C：GUI 与账号模块终期交付记录
+
+### 4.1 成员 C 交付成果与文档索引
+- **文档交付**：
+  - [使用说明.md](../使用说明.md)：面向最终用户的系统要求、快速上手、判题与多点结果查看、筛选、题包移除恢复、数据迁移与常见 FAQ；
+  - [gui-account-module.md](gui-account-module.md)：界面与账号模块课程设计说明（类层次、会话隔离、判题锁机制、`judgingProgress_` 快照与防竞态设计）；
+- **代码与功能增强**：
+  - `ui/mainwindow.cpp`：升级题面显示逻辑为 `ui->statementText->setMarkdown(...)`，支持 GitHub 风格 Markdown 富文本排版渲染，优化题面阅读体验；
+  - 注释全量规范化：`src/account/account_manager.h/.cpp`、`ui/mainwindow.h/.cpp`、`ui/logindialog.h/.cpp`、`ui/filterdialog.h/.cpp`、`ui/main.cpp` 全部补齐标准课程类与函数级注释规范；
+  - 本地 50 题组合筛选与压力验证：实测在 50+ 题目集下，标题子串、标签、题包 ID 及做题状态组合筛选瞬时响应无卡顿，无结果与清空条件准确恢复。
+

@@ -397,7 +397,7 @@ void MainWindow::showSelectedProblems(int row,int column)//函数作用：点击
         !sourcePath_.isEmpty() && QFileInfo(sourcePath_).isFile()); // 路径非空且指向普通文件才允许判题
 
     //在题面区域显示题面
-    ui->statementText->setPlainText(QString::fromUtf8(problem.statement.c_str()));
+    ui->statementText->setMarkdown(QString::fromUtf8(problem.statement.c_str()));
     
 }
 
