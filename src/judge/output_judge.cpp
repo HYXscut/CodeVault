@@ -1,19 +1,22 @@
+// 输出比较器实现：换行符统一与精确文本比对
 #include "output_judge.h"
 
 using namespace std;
 
-// 将文本中的 CRLF ("\r\n") 统一替换为 LF ("\n")，其他字符（包括空格和末尾换行）原样保留
+// 把字符串 text 中的 "\r\n" 全部换成 "\n"，返回处理后的新字符串。
+// 做法：从头到尾扫一遍 text，遇到 '\r' 且紧跟着 '\n' 就写入一个 '\n' 并跳过下一位，
+// 空格、空行和末尾换行都按原样保留，不随便删改。
 string TextOutputJudge::normalizeNewlines(const string &text)
 {
     string result;
 
     for (size_t i = 0; i < text.size(); ++i)
     {
-        // 如果当前是 '\r' 且紧接着下一个字符是 '\n'，就合并成一个 '\n'
+        // 遇到成对的 "\r\n" 合并成一个 '\n'，并多跳过后面的 '\n'
         if (text[i] == '\r' && i + 1 < text.size() && text[i + 1] == '\n')
         {
             result += '\n';
-            ++i; // 跳过已经合并掉的 '\n'
+            ++i;
         }
         else
         {
@@ -24,8 +27,9 @@ string TextOutputJudge::normalizeNewlines(const string &text)
     return result;
 }
 
+// 精确比较程序实际输出 actual 和标准答案 expected，完全相同返回 true。
+// 做法：先调用父类 TextOutputJudge::normalizeNewlines 消除系统换行差异，再用 == 逐字符比较。
 bool ExactJudge::compare(const string &actual, const string &expected) const
 {
-    // 统一换行符后直接用 string 的 == 比较是否完全一致
     return normalizeNewlines(actual) == normalizeNewlines(expected);
 }

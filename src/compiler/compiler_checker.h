@@ -1,3 +1,4 @@
+// 编译器检查模块：异步检测本地 g++ 是否可用并读取版本号
 #ifndef CODEJUDGE_COMPILER_CHECKER_H
 #define CODEJUDGE_COMPILER_CHECKER_H
 
@@ -8,47 +9,52 @@
 
 class QTimer;
 
+// 编译器检查类，公有继承自 QObject，用来借助 Qt 的信号槽异步执行 "g++ --version"。
+// 主要属性：compilerPath_（编译器路径）、info_（最近一次检查结果）、process_（外部进程）、
+// timer_（5 秒超时计时器），以及 busy_、timeOut_、pendingError_ 几个状态标记。
+// 对外提供 checkCompiler() 发起检查、getCompilerInfo() 取结果，检查完发出 checkFinished() 信号；
+// 内部靠几个私有槽函数和 finishCheck() 配合处理进程结束、出错和超时。
 class CompilerChecker : public QObject
 {
     Q_OBJECT
 
   public:
-    // 构造函数：初始化待检查的编译器路径（不主动发起检查）
+    // 构造函数：保存编译器路径 compilerPath 并初始化进程与计时器，parent 交给 QObject 管理生命周期
     CompilerChecker(std::string compilerPath, QObject *parent = nullptr);
 
-    // 异步发起编译器检查：非阻塞执行，若上一次检查未结束则返回 false
+    // 发起一次异步检查（不卡界面）；如果上一次检查还没完直接返回 false，否则返回 true
     bool checkCompiler();
 
-    // 获取最近一次完成的检查结果
+    // 返回最近一次检查得到的结果结构体
     CompilerInfo getCompilerInfo();
 
   signals:
-    // 检查完成信号：当次检查结束（成功或失败）后发出
+    // 检查结束信号，不管成功还是失败，每次检查最后都会发一次，通知界面来取结果
     void checkFinished();
 
   private slots:
-    // 用于启动外部编译器的槽函数
+    // 真正启动 g++ --version 的槽函数
     void startCheck();
 
-    // 当g++.exe运行结束时，由QProcess自动调用的处理函数
+    // 进程结束时由 QProcess 触发，根据退出码 exitCode 和退出状态 exitStatus 判断是否成功
     void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
 
-    // 当g++.exe启动失败或运行出错时，由QProcess自动调用的处理函数
+    // 进程启动失败或运行异常时由 QProcess 触发，processError 表示具体错误类型
     void onProcessError(QProcess::ProcessError processError);
 
-    // 当超过5s仍未结束时，由QTimer自动调用的超时处理函数
+    // 超过 5 秒还没结束时由 QTimer 触发
     void onTimeout();
 
   private:
-    std::string compilerPath_; // 待检查的编译器绝对路径
-    CompilerInfo info_;        // 用于保存最近一次检查结果的结构体
-    QProcess *process_;         // Qt外部进程控制对象指针
-    QTimer *timer_;            // Qt5秒超时计时器对象指针
-    bool busy_;                // 是否正在进行检查
-    bool timeOut_;             // 本次检查是否发生超时
-    std::string pendingError_; // 用于暂存进程错误原因的字符串
+    std::string compilerPath_; // g++ 编译器的完整路径
+    CompilerInfo info_;        // 最近一次检查的结果（是否找到、版本号、错误信息）
+    QProcess *process_;        // 用来运行外部 g++ 的进程对象
+    QTimer *timer_;            // 5 秒超时计时器
+    bool busy_;                // 标记当前是否正在检查，防止重复启动
+    bool timeOut_;             // 标记这次检查是不是因为超时停掉的
+    std::string pendingError_; // 暂存进程出错时的中文说明，方便后续收尾时使用
 
-    // 内部辅助函数：只在进程已停止或未启动时统一写入info_并发出checkFinished信号.
+    // 统一收尾函数：把检查结果（found/version/error）写入 info_，停掉计时器并发出完成信号
     void finishCheck(bool found, std::string version, std::string error);
 };
 
