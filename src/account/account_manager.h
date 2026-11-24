@@ -4,37 +4,78 @@
 #include <string>
 #include <vector>
 
-struct Account // 账号持久化记录；不保存明文密码，进度仅引用 userId。
-{
-    std::string userId; // 稳定内部 ID；新账号分配 u0001 等，旧账号迁移保留原 ID。
-    std::string username; // 登录及显示用的用户名，与 ID 分开。
-    std::string algorithm = "PBKDF2-SHA256"; // 文件中明确记录派生算法。
-    int iterations = 600000; // 版本 1 固定迭代次数。
-    std::string saltHex; // 每账号 16 字节随机盐，按十六进制写入。
-    std::string verifierHex; // 32 字节派生值，按十六进制写入。
-};
-
-class AccountManager // 封装注册、验证和原子文件保存；无继承关系。
+/*
+ 类说明：账号管理类，负责账号的注册、登录验证、文件存储与当前登录会话管理。
+ 继承与派生：独立的类，无基类继承，无子类派生。
+ 类的属性说明：
+    filePath_: 账号数据文件存储路径（std::string）
+    accounts_: 内存中已加载的账号列表（std::vector<std::pair<std::string, std::string>>）
+    currentUserId_: 当前已登录用户名（std::string）
+    loaded_: 标记账号文件是否已成功加载（bool）
+ 类的方法说明：
+    AccountManager(): 构造函数
+    load(): 加载账号文件，支持初次自动创建
+    registerAccount(): 注册新账号并查重
+    login(): 校验账号密码并登录
+    isLoggedIn(): 查询登录状态
+    currentUserId(): 获取当前登录用户名
+    logout(): 退出登录
+    save(): 私有函数，保存账号数据至文件
+ */
+class AccountManager
 {
 public:
-    explicit AccountManager(std::string filePath); // 记录 UTF-8 绝对路径，不在构造时读写。
+    // 创建账号管理对象
+    // 参数说明：filePath - 账号保存文件路径
+    explicit AccountManager(std::string filePath);
+
+    // 加载账号文件
+    // 参数说明：error - 传出加载错误提示
+    // 返回值：成功返回 true，失败返回 false
     bool load(std::string& error);
-    // 整份校验后启用账号；旧版两字段文件原子转换，失败保留文件并禁止操作。
-    bool registerAccount(const std::string& username, const std::string& password, std::string& error);
-    // 校验用户名及查重，生成候选记录；保存成功才加入正式内存。
-    bool login(const std::string& username, const std::string& password,
-               std::string& userId, std::string& error);
-    // 根据记录的盐重新派生并比较；成功才设置会话及输出 ID，失败不改输出参数。
-    bool isLoggedIn() const; // 根据会话 ID 判断登录状态。
-    std::string currentUserId() const; // 返回会话 ID 的副本。
-    void logout(); // 清空会话，不删除账号和进度。
+
+    // 注册新账号
+    // 参数说明：userId - 用户名；password - 密码；error - 传出错误原因
+    // 返回值：注册成功返回 true，失败返回 false
+    bool registerAccount(const std::string& userId,const std::string& password,std::string& error);
+
+    // 登录已有账号
+    // 参数说明：userId - 用户名；password - 密码；error - 传出错误原因
+    // 返回值：登录成功返回 true，失败返回 false
+    bool login(const std::string& userId,const std::string& password,std::string& error);
+
+    // 登录并传出用户名
+    // 参数说明：userId - 用户名；password - 密码；outUserId - 传出用户名；error - 错误信息
+    bool login(const std::string& userId,const std::string& password,std::string& outUserId,std::string& error);
+
+    // 判断当前是否已经登录
+    // 返回值：已登录返回 true，未登录返回 false
+    bool isLoggedIn() const;
+
+    // 获取当前登录用户名
+    // 返回值：返回当前用户名
+    std::string currentUserId() const;
+
+    // 退出当前账号
+    void logout();
 
 private:
-    std::string filePath_; // 账号文件路径。
-    std::vector<Account> accounts_; // 已校验的账号记录。
-    std::string currentUserId_; // 当前会话身份。
-    bool loaded_ = false; // 最近一次 load 是否成功。
-    bool save(const std::vector<Account>& candidate, std::string& error);
-    // 将候选集合写入临时文件并提交，失败不修改旧文件和正式内存。
+    // 保存账号文件路径
+    std::string filePath_;
+
+    // 保存已经加载的账号数据
+    std::vector<std::pair<std::string, std::string>> accounts_;
+
+    // 保存当前登录用户名
+    std::string currentUserId_;
+
+    // 保存账号文件是否加载成功
+    bool loaded_ = false;
+
+    // 将当前账号数据保存到文件
+    // 参数说明：error - 传出保存错误原因
+    // 返回值：保存成功返回 true，失败返回 false
+    bool save(std::string& error);
 };
+
 #endif

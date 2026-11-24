@@ -4,6 +4,9 @@
 #include <QPushButton> // 使用按钮控件类型
 
 // 创建登录对话框
+// 功能说明：初始化对话框界面组件与显示属性，建立按钮点击信号与处理槽函数的连接
+// 参数说明：parent 父窗口指针，默认为 nullptr
+// 实现步骤：1. 根据 .ui 文件创建界面控件 2. 设置无边框与背景属性 3. 密码输入框设为密文模式并聚焦用户名 4. 连接各按钮的点击信号至对应槽函数
 LoginDialog::LoginDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::LoginDialog) // 创建界面对象
@@ -14,162 +17,56 @@ LoginDialog::LoginDialog(QWidget *parent) :
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground, false);
 
-    // 设置登录窗口的整体样式
-    setStyleSheet(R"(
-        QDialog {
-            background: white;
-            border: 1px solid #D9DEE8;
-            border-radius: 14px;
-        }
-        QFrame#leftPanel {
-            border-image: url(:/login_background.svg) 0 0 0 0 stretch stretch;
-            border-top-left-radius: 14px;
-            border-bottom-left-radius: 14px;
-        }
-        QLabel#acBadge, QLabel#cppBadge {
-            color: white;
-            background: rgba(255, 255, 255, 35);
-            border: 1px solid rgba(255, 255, 255, 90);
-            border-radius: 7px;
-            padding: 5px 8px;
-            font-size: 12px;
-        }
-        QLabel#logoLabel {
-            color: transparent;
-            background: transparent;
-            border: none;
-            border-radius: 32px;
-            min-width: 58px;
-            max-width: 58px;
-            min-height: 58px;
-            max-height: 58px;
-            font-size: 22px;
-            font-weight: bold;
-        }
-        QLabel#brandLabel {
-            color: white;
-            font-size: 25px;
-            font-weight: bold;
-            margin-top: 8px;
-        }
-        QLabel#brandSubtitleLabel {
-            color: #D8E2FF;
-            font-size: 13px;
-        }
-        QLabel#versionLabel {
-            color: #D8E2FF;
-            font-size: 11px;
-        }
-        QFrame#rightPanel {
-            background: white;
-            border-top-right-radius: 14px;
-            border-bottom-right-radius: 14px;
-        }
-        QLabel#titleLabel {
-            color: #20242B;
-            font-size: 22px;
-            font-weight: bold;
-        }
-        QLabel#descriptionLabel {
-            color: #8A919D;
-            font-size: 12px;
-        }
-        QLabel#usernameLabel, QLabel#passwordLabel {
-            color: #303641;
-            font-size: 12px;
-        }
-        QLineEdit {
-            min-height: 34px;
-            border: 1px solid #D4DAE4;
-            border-radius: 6px;
-            padding: 0 10px;
-            color: #252A33;
-            background: #FFFFFF;
-        }
-        QLineEdit:focus {
-            border: 2px solid #4D82E8;
-            padding: 0 9px;
-        }
-        QPushButton#closeButton {
-            color: #7E8794;
-            border: none;
-            background: transparent;
-            font-size: 22px;
-            min-width: 24px;
-            max-width: 24px;
-            min-height: 24px;
-            max-height: 24px;
-            padding: 0;
-        }
-        QPushButton#closeButton:hover {
-            color: #252A33;
-            background: #F0F2F5;
-            border-radius: 12px;
-        }
-        QPushButton#loginButton, QPushButton#registerButton, QPushButton#cancelButton {
-            min-height: 34px;
-            min-width: 70px;
-            border-radius: 6px;
-            padding: 0 12px;
-            font-size: 13px;
-        }
-        QPushButton#loginButton {
-            color: white;
-            background: #3269D7;
-            border: 1px solid #3269D7;
-        }
-        QPushButton#loginButton:hover { background: #285BC3; }
-        QPushButton#registerButton, QPushButton#cancelButton {
-            color: #303641;
-            background: white;
-            border: 1px solid #D4DAE4;
-        }
-        QPushButton#registerButton:hover, QPushButton#cancelButton:hover {
-            background: #F5F7FA;
-        }
-        QLabel#messageLabel {
-            color: #D64545;
-            font-size: 12px;
-            min-height: 20px;
-        }
-    )");
-
     // 将密码输入框设置为隐藏字符显示
     ui->passwordEdit->setEchoMode(QLineEdit::Password);
-    ui->confirmPasswordEdit->setEchoMode(QLineEdit::Password);
-    setRegisterMode(false);
 
     // 窗口打开后自动聚焦用户名输入框
     ui->usernameEdit->setFocus();
 
     // 连接登录按钮的点击信号
     connect(ui->loginButton, &QPushButton::clicked,this, &LoginDialog::onLoginClicked);
+
     connect(ui->registerButton, &QPushButton::clicked,this, &LoginDialog::onRegisterClicked);
+
     connect(ui->cancelButton, &QPushButton::clicked,this, &LoginDialog::onCancelClicked);
+
     connect(ui->closeButton, &QPushButton::clicked,this, &LoginDialog::onCancelClicked);
 }
 
+// 析构登录对话框对象
+// 功能说明：释放 Qt Designer 动态分配的界面对象资源
+// 参数说明：无
 LoginDialog::~LoginDialog()
 {
     delete ui; // 释放界面对象
 }
 
 // 返回用户输入的用户名
+// 功能说明：获取用户在用户名输入框中输入的文本并去除首尾空格
+// 参数说明：无
+// 返回值：去除首尾空格后的用户名字符串
+// 实现步骤：1. 读取 usernameEdit 的文本 2. 调用 trimmed 去除空格并返回
 QString LoginDialog::userId() const
 {
-    return ui->usernameEdit->text(); // 原样校验，首尾空格也属于非法字符
+    return ui->usernameEdit->text().trimmed(); // 去除用户名首尾空格
 }
 
 // 返回用户输入的密码
+// 功能说明：获取用户在密码输入框中输入的原始密码文本
+// 参数说明：无
+// 返回值：密码输入框中的字符串
+// 实现步骤：直接读取并返回 passwordEdit 的文本内容
 QString LoginDialog::password() const
 {
     return ui->passwordEdit->text(); // 读取密码内容
 }
 
 // 处理登录按钮点击
+// 功能说明：校验用户输入的完整性，若非空则关闭对话框并返回 Accepted 通知主窗口登录
+// 参数说明：无
+// 实现步骤：1. 检查用户名是否为空，为空则提示并聚焦 2. 检查密码是否为空，为空则提示并聚焦 3. 输入完整后关闭对话框并返回 Accepted
 void LoginDialog::onLoginClicked()
 {
-    if (registerMode_) { setRegisterMode(false); return; } // 注册时该按钮用于返回登录。
     // 检查用户名是否为空
     if (userId().isEmpty())
     {
@@ -178,6 +75,7 @@ void LoginDialog::onLoginClicked()
         return; // 停止本次登录
     }
 
+    // 检查密码是否为空
     if (password().isEmpty())
     {
         ui->messageLabel->setText(QStringLiteral("密码不能为空")); // 显示错误提示
@@ -189,9 +87,11 @@ void LoginDialog::onLoginClicked()
 }
 
 // 处理注册按钮点击
+// 功能说明：校验注册输入的完整性，设置注册请求属性标记，并返回 Accepted 通知主窗口
+// 参数说明：无
+// 实现步骤：1. 检查注册用户名是否为空 2. 检查注册密码是否为空 3. 设置 registerRequested 属性 4. 关闭对话框并返回 Accepted
 void LoginDialog::onRegisterClicked()
 {
-    if (!registerMode_) { setRegisterMode(true); return; } // 首次点击先展开确认密码字段。
     // 检查注册用户名是否为空
     if (userId().isEmpty())
     {
@@ -200,18 +100,12 @@ void LoginDialog::onRegisterClicked()
         return; // 停止本次注册
     }
 
+    // 检查注册密码是否为空
     if (password().isEmpty())
     {
         ui->messageLabel->setText(QStringLiteral("注册时密码不能为空")); // 显示错误提示
         ui->passwordEdit->setFocus(); // 将焦点返回密码输入框
         return; // 停止本次注册
-    }
-
-    if (password() != ui->confirmPasswordEdit->text())
-    {
-        ui->messageLabel->setText(QStringLiteral("两次密码不一致"));
-        ui->confirmPasswordEdit->setFocus();
-        return;
     }
 
     // 使用对话框属性通知主窗口执行注册流程
@@ -222,21 +116,10 @@ void LoginDialog::onRegisterClicked()
 }
 
 // 处理取消按钮和关闭按钮点击
+// 功能说明：放弃登录或注册操作，关闭对话框并返回 Rejected
+// 参数说明：无
+// 实现步骤：调用 reject 方法关闭对话框
 void LoginDialog::onCancelClicked()
 {
     reject(); // 关闭对话框并返回 Rejected
-}
-void LoginDialog::setRegisterMode(bool enabled)
-{
-    registerMode_ = enabled;
-    ui->confirmPasswordLabel->setVisible(enabled);
-    ui->confirmPasswordEdit->setVisible(enabled);
-    ui->confirmPasswordEdit->clear();
-    ui->messageLabel->clear();
-    ui->titleLabel->setText(enabled ? QStringLiteral("注册账号") : QStringLiteral("账号登录"));
-    ui->descriptionLabel->setText(enabled ? QStringLiteral("用户名须为 3～20 位字母、数字或下划线") : QStringLiteral("登录以管理和运行本地评测任务"));
-    ui->descriptionLabel->setWordWrap(true);
-    ui->registerButton->setText(enabled ? QStringLiteral("确认注册") : QStringLiteral("注册"));
-    ui->loginButton->setText(enabled ? QStringLiteral("返回登录") : QStringLiteral("登录"));
-    setProperty("registerRequested", false);
 }

@@ -9,16 +9,20 @@
 #include <QMessageBox>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
-#include <QTableWidgetItem> // 使用表格单元格对象
-#include <QFileDialog>//提供选择文件夹的对话框
-#include <QFileInfo> // 检查文件信息
-#include <QCloseEvent> // 提供关闭事件的定义
-#include <QDateTime> //获取当前时间
-#include <QFile> // 读写隐藏题包记录
-#include <QTextStream> // 按行读写文本
-#include <QAbstractItemView>//使用表格选择和编辑模式
-#include <QHeaderView>//使用表格表头
+#include <QTableWidgetItem>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QCloseEvent>
+#include <QDateTime>
+#include <QFile>
+#include <QTextStream>
+#include <QAbstractItemView>
+#include <QHeaderView>
 
+// 构造主窗口对象
+// 功能说明：初始化主界面、表格与布局，实例化各核心业务模块，完成账号登录与题库及进度初始化
+// 参数说明：parent 父窗口指针，默认为 nullptr
+// 实现步骤：1. setupUi 初始化控件 2. 配置表格表头与列宽 3. 构建各业务管理类对象 4. 加载账号文件并弹出登录对话框 5. 加载进度文件与题库 6. 连接所有信号槽 7. 刷新题目列表
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow),
@@ -39,7 +43,7 @@ MainWindow::MainWindow(QWidget *parent)
     packageFilter_(QStringLiteral("全部题包"))
 {
     ui->setupUi(this);
-
+    //进行一些格式和功能的设置
     ui->problemTable->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn); // 底部始终保留横向滚动条。
     ui->problemTable->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel); // 按像素平滑滚动。
     ui->problemTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive); // 用户仍可拖动表头调整列宽。
@@ -49,23 +53,10 @@ MainWindow::MainWindow(QWidget *parent)
     ui->problemTable->setColumnWidth(1, 80); // 题号列。
     ui->problemTable->setColumnWidth(2, 220); // 标题列预留更多空间。
     ui->problemTable->setColumnWidth(3, 110); // 状态列。
-    ui->problemTable->setStyleSheet(R"(
-        QScrollBar:horizontal { height: 14px; background: #e5eaf1; margin: 0px; border-radius: 6px; }
-        QScrollBar::handle:horizontal { background: #8aa4c8; min-width: 28px; border-radius: 6px; }
-        QScrollBar::handle:horizontal:hover { background: #527bb4; }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; height: 0px; }
-        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
-    )"); // 样式仅作用于题目表格的横向滚动条，使滑块容易辨认。
-
-        ui->problemTable->verticalHeader()->hide(); // 隐藏题目列表左侧的行号表头
+    ui->problemTable->verticalHeader()->hide(); // 隐藏题目列表左侧的行号表头
     ui->pointResultTable->verticalHeader()->hide(); // 隐藏逐点结果表左侧行号和左上角黑块
     ui->pointResultTable->setColumnCount(4);//设置测试点结果表的列数
-    ui->pointResultTable->setHorizontalHeaderLabels({
-        QStringLiteral("测试点"),
-        QStringLiteral("状态"),
-        QStringLiteral("耗时"),
-        QStringLiteral("说明")
-    });//设置表头文字
+    ui->pointResultTable->setHorizontalHeaderLabels({QStringLiteral("测试点"),QStringLiteral("状态"),QStringLiteral("耗时"),QStringLiteral("说明")});//设置表头文字
     ui->pointResultTable->setRowCount(0);//程序启动时暂时没有测试点结果
     ui->pointResultTable->setEditTriggers(QAbstractItemView::NoEditTriggers);//设置表格编辑方式
     ui->pointResultTable->setSelectionBehavior(QAbstractItemView::SelectRows);//点击时选择整行
@@ -106,10 +97,7 @@ MainWindow::MainWindow(QWidget *parent)
     if (!accountManager_->load(accountError))
     {
         // 显示账号文件错误
-        QMessageBox::critical(
-            this,
-            QStringLiteral("账号文件错误"),
-            QString::fromUtf8(accountError.c_str()));
+        QMessageBox::critical(this,QStringLiteral("账号文件错误"),QString::fromUtf8(accountError.c_str()));
         // 停止窗口初始化
         close();
 
@@ -132,11 +120,7 @@ MainWindow::MainWindow(QWidget *parent)
     // 判断进度文件是否加载失败
     if (!progressLoaded)
     {
-        QMessageBox::critical(
-            this,
-            QStringLiteral("进度文件加载失败"),
-            QString::fromUtf8(progressError.c_str()) +
-                QStringLiteral("\n原文件未修改。请检查文件后重新启动。"));
+        QMessageBox::critical(this,QStringLiteral("进度文件加载失败"),QString::fromUtf8(progressError.c_str()) +QStringLiteral("\n原文件未修改。请检查文件后重新启动。"));
 
         return; // 初始化未完成，不进入主界面
     }
@@ -182,16 +166,28 @@ MainWindow::MainWindow(QWidget *parent)
     startupReady_ = true; // 登录成功并完成主窗口初始化
 }
 
+// 析构主窗口对象
+// 功能说明：释放 Qt Designer 动态分配的界面资源
+// 参数说明：无
 MainWindow::~MainWindow()
 {
     delete ui;
 }
 
+// 查询启动就绪状态
+// 功能说明：查询主窗口是否已经成功完成启动初始化与账号登录
+// 参数说明：无
+// 返回值：启动且登录成功返回 true，否则返回 false
+// 实现步骤：直接返回 startupReady_ 成员变量
 bool MainWindow::isStartupReady() const
 {
     return startupReady_; // 返回启动状态
 }
 
+// 刷新题目列表
+// 功能说明：根据当前的标题关键字、标签、状态及题包筛选条件，查询题库并刷新题目列表展示
+// 参数说明：无
+// 实现步骤：1. 检查判题引擎忙碌状态 2. 加载题库并构建 ProblemQuery 3. 调用 searchProblems 获取匹配题目 4. 逐行填充表格并更新各题目练习状态
 void MainWindow::refreshProblems()//函数作用：刷新题目列表
 {
     if (judgeEngine_->isBusy()) return; // 判题中禁止修改当前绑定及题库。
@@ -267,44 +263,24 @@ void MainWindow::refreshProblems()//函数作用：刷新题目列表
             progressText = QStringLiteral("未开始"); // 显示未开始
         }
 
-        auto* statusItem = new QTableWidgetItem( // 创建状态单元格
-            progressText); // 写入状态文字
-
-        packageItem->setData( // 保存题包编号
-            Qt::UserRole, // 使用自定义数据角色
-            QString::fromUtf8(problem.packageId.c_str())); // 写入题包编号
-
-        packageItem->setData( // 保存题目编号
-            Qt::UserRole + 1, // 使用第二个自定义数据角色
-            QString::fromUtf8(problem.problemId.c_str())); // 写入题目编号
-
-        ui->problemTable->setItem( // 设置题包编号
-            displayRow, // 使用当前显示行
-            0, // 写入第 0 列
-            packageItem); // 写入单元格
-
-        ui->problemTable->setItem( // 设置题目编号
-            displayRow, // 使用当前显示行
-            1, // 写入第 1 列
-            problemItem); // 写入单元格
-
-        ui->problemTable->setItem( // 设置题目标题
-            displayRow, // 使用当前显示行
-            2, // 写入第 2 列
-            titleItem); // 写入单元格
-
-        ui->problemTable->setItem( // 设置题目状态
-            displayRow, // 使用当前显示行
-            3, // 写入第 3 列
-            statusItem); // 写入单元格
-
-        ++displayRow; // 准备下一条显示行
+        auto* statusItem = new QTableWidgetItem(progressText);
+        packageItem->setData(Qt::UserRole, QString::fromUtf8(problem.packageId.c_str()));
+        packageItem->setData(Qt::UserRole + 1, QString::fromUtf8(problem.problemId.c_str()));
+        ui->problemTable->setItem(displayRow, 0, packageItem);
+        ui->problemTable->setItem(displayRow, 1, problemItem);
+        ui->problemTable->setItem(displayRow, 2, titleItem);
+        ui->problemTable->setItem(displayRow, 3, statusItem);
+        ++displayRow;
     }
 
     ui->statusLabel->setText( // 更新题目数量提示
         QStringLiteral("显示 %1 道题目").arg(displayRow)); // 显示筛选后的数量
 }
 
+// 导入外部题包
+// 功能说明：打开目录选择对话框，选择题包文件夹并导入到共享题库
+// 参数说明：无
+// 实现步骤：1. 检查判题引擎状态 2. 弹出文件夹选择对话框 3. 调用 library_->importPackage 导入题包 4. 导入成功则刷新题目列表
 void MainWindow::importPackage()//函数作用：导入题包
 {
     if (judgeEngine_->isBusy()) return; // 判题中禁止更改共享题库和筛选。
@@ -336,6 +312,10 @@ void MainWindow::importPackage()//函数作用：导入题包
     ui->statusLabel->setText(QStringLiteral("题包导入成功"));
 }
 
+// 展示选中题目详情
+// 功能说明：响应题目列表行点击事件，获取题目详情展示题面并恢复该题的源码绑定与做题进度
+// 参数说明：row 选中的表格行；column 选中的表格列（忽略）
+// 实现步骤：1. 从选中行的 UserRole 中提取题包与题目编号 2. 调用 findProblem 获取题目详情 3. 读取该题目在当前用户下的进度 4. 更新源码路径与题面展示
 void MainWindow::showSelectedProblems(int row,int column)//函数作用：点击题目后处理
 {
     Q_UNUSED(column);
@@ -421,6 +401,10 @@ void MainWindow::showSelectedProblems(int row,int column)//函数作用：点击
     
 }
 
+// 检查编译器环境
+// 功能说明：发起本地 GCC 编译器工具链环境异步检查
+// 参数说明：无
+// 实现步骤：1. 调用 checker_->checkCompiler() 触发异步检测 2. 禁用检查按钮并更新状态提示
 void MainWindow::checkCompiler()
 {
     if(!checker_->checkCompiler()) // 调用 B 的接口，判断请求是否被接受
@@ -432,6 +416,10 @@ void MainWindow::checkCompiler()
     ui->statusLabel->setText(QStringLiteral("正在检查编译器…"));
 }
 
+// 编译器检查完成回调
+// 功能说明：接收编译器异步检测完成信号，读取检查结果并更新界面状态与按钮可用性
+// 参数说明：无
+// 实现步骤：1. 调用 getCompilerInfo 获取结果 2. 根据 found 状态显示编译器版本或错误 3. 重新启用检查按钮
 void MainWindow::onCompilerCheckFinished()
 {
     const CompilerInfo info=checker_->getCompilerInfo();//读取本次检查结果
@@ -450,6 +438,10 @@ void MainWindow::onCompilerCheckFinished()
     ui->checkCompilerButton->setEnabled(true);//检查结束后恢复按钮
 }
 
+// 选择本地源码文件
+// 功能说明：打开文件选择对话框，选择本地 C++ 源码并与当前题目完成绑定及进度保存
+// 参数说明：无
+// 实现步骤：1. 检查判题状态 2. 打开对话框选择 .cpp 文件 3. 校验路径有效性 4. 组装 Progress 并调用 saveProgress 保存 5. 更新界面控件
 void MainWindow::chooseSource()
 {
     if (judgeEngine_->isBusy()) return; // 判题中禁止修改当前绑定及题库。
@@ -506,6 +498,10 @@ void MainWindow::chooseSource()
     ui->judgeButton->setEnabled(hasSelectedProblem_);//已选择题目时才允许判题
 }
 
+// 发起判题评测
+// 功能说明：锁定当前题目身份并启动判题任务，包括测试点加载、环境验证与判题引擎触发
+// 参数说明：无
+// 实现步骤：1. 校验账号身份一致性 2. 检查题目选择与源码文件存在性 3. 循环加载测试点数据 4. 锁定 judgingProgress_ 5. 调用 startJudge 触发评测 6. 禁用冲突按钮
 void MainWindow::startJudge()
 {
     const std::string sessionId = accountManager_->currentUserId();
@@ -616,6 +612,10 @@ void MainWindow::startJudge()
     ui->filterButton->setEnabled(false);
 }
 
+// 判题完成处理槽函数
+// 功能说明：接收判题完成信号，展示逐点结果、耗时、实际输出与错误日志，并更新保存有效进度
+// 参数说明：无
+// 实现步骤：1. 获取 JudgeResult 2. 填充逐点测试结果表 3. 根据最终状态更新 Progress 4. 调用 saveProgress 保存 5. 更新输出展示 6. 恢复操作按钮并刷新列表
 void MainWindow::onJudgeFinished()
 {
     const JudgeResult result=judgeEngine_->getResult();
@@ -767,6 +767,10 @@ void MainWindow::onJudgeFinished()
 
 }
 
+// 窗口关闭事件处理
+// 功能说明：拦截窗口关闭请求，若处于判题运行状态则阻止退出，保障数据安全
+// 参数说明：event 窗口关闭事件指针
+// 实现步骤：1. 判断判题引擎是否忙碌 2. 忙碌则忽略事件并提示 3. 空闲则调用基类关闭事件
 void MainWindow::closeEvent(QCloseEvent* event)
 {
     if (judgeEngine_->isBusy())
@@ -778,6 +782,10 @@ void MainWindow::closeEvent(QCloseEvent* event)
     QMainWindow::closeEvent(event);
 }
 
+// 清除源码绑定
+// 功能说明：解除当前题目的本地 C++ 源码路径绑定并同步保存进度
+// 参数说明：无
+// 实现步骤：1. 检查判题状态与题目选中状态 2. 清空 Progress 中的 sourcePath 并调用 saveProgress 3. 清空界面路径显示并禁用判题按钮
 void MainWindow::clearSource()//函数作用：清除源码绑定
 {
     if (judgeEngine_->isBusy()) return; // 判题中禁止修改当前绑定及题库。
@@ -822,6 +830,10 @@ void MainWindow::clearSource()//函数作用：清除源码绑定
 }
 
 // 定义登录流程
+// 功能说明：循环显示模态登录窗口，处理用户登录认证与账号注册，绑定当前会话身份
+// 参数说明：无
+// 返回值：登录成功返回 true，用户取消或关闭登录返回 false
+// 实现步骤：1. 循环构造 LoginDialog 2. 若用户请求注册则调用 registerAccount 3. 若用户请求登录则调用 login 4. 登录成功绑定 currentUserId_ 与 userId_ 5. 设置主界面标题
 bool MainWindow::showLoginDialog()
 {
     while (true) // 失败后重新显示窗口，用循环代替递归，避免多次输错不断增加调用层数。
@@ -854,6 +866,9 @@ bool MainWindow::showLoginDialog()
 }
 
 // 定义退出账号函数
+// 功能说明：注销当前登录会话，清空所有界面数据与题目状态，并重新弹出登录对话框
+// 参数说明：无
+// 实现步骤：1. 检查判题忙碌状态 2. 清空题目、进度、源码与各筛选条件 3. 调用 accountManager_->logout 4. 清空界面所有展示控件 5. 重新调用 showLoginDialog 6. 刷新题库
 void MainWindow::logoutAccount()
 {
     // 判题期间不允许退出账号
@@ -940,6 +955,9 @@ void MainWindow::logoutAccount()
 }
 
 // 打开筛选对话框
+// 功能说明：收集题库中已有的全部标签与题包，弹出多条件筛选对话框并刷新列表
+// 参数说明：无
+// 实现步骤：1. 检查判题状态 2. 遍历题库提取去重的题包与标签 3. 设置给 FilterDialog 并模态执行 4. 若确认则保存筛选条件并调用 refreshProblems 刷新
 void MainWindow::openFilterDialog()
 {
     if (judgeEngine_->isBusy()) return; // 判题中禁止更改共享题库和筛选。
@@ -1010,6 +1028,10 @@ void MainWindow::openFilterDialog()
     refreshProblems();
 }
 
+// 移除选中的题包
+// 功能说明：向用户弹窗确认后，从共享题库中隐藏当前选中的题包并重置当前题目状态
+// 参数说明：无
+// 实现步骤：1. 校验题目与题包选中状态 2. 弹出 QMessageBox 确认 3. 调用 removePackageFromLibrary 隐藏题包 4. 清空当前题面、进度与输出 5. 刷新题目列表
 void MainWindow::removeSelectedPackage()
 {
     if (judgeEngine_->isBusy()) return; // 判题中禁止更改共享题库和筛选。

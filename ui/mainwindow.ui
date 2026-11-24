@@ -288,6 +288,31 @@ QTextEdit#actualOutputText, QTextEdit#expectedOutputText, QTextEdit#errorOutputT
              <verstretch>1</verstretch>
             </sizepolicy>
            </property>
+           <property name="styleSheet">
+            <string notr="true">QScrollBar:horizontal {
+    height: 14px;
+    background: #e5eaf1;
+    margin: 0px;
+    border-radius: 6px;
+}
+QScrollBar::handle:horizontal {
+    background: #8aa4c8;
+    min-width: 28px;
+    border-radius: 6px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: #527bb4;
+}
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+    height: 0px;
+}
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: transparent;
+}</string>
+           </property>
            <property name="editTriggers">
             <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
            </property>
