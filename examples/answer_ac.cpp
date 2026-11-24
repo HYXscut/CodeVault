@@ -1,14 +1,16 @@
-#include <iostream> 
+#include <iostream>
 
+// 以下程序用于检查正确答案AC
+// main没有参数。
+// 逻辑：读取两个整数并输出它们的和，正常返回0。
 int main()
 {
-    // 本程序对应 P001「A+B 求和」。
-    // main 没有参数；正常完成时返回 0。
-    long long a = 0; // 保存输入的第一个整数
-    long long b = 0; // 保存输入的第二个整数
 
-    std::cin >> a >> b; // 按题目格式读取两个由空格分隔的整数
-    std::cout << a + b << '\n'; // 输出正确的和；'\n' 保留标准答案的末尾换行
+    long long a = 0;
+    long long b = 0;
 
-    return 0; // 告诉判题器程序正常结束
+    std::cin >> a >> b;
+    std::cout << a + b << '\n';
+
+    return 0;
 }

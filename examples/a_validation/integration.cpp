@@ -9,17 +9,24 @@
 #include <iostream>
 #include <cstdlib>
 
+// 以下函数用于检查联调结果
+// ok为是否通过，message为失败说明。
+// 逻辑：失败时输出说明并退出，通过时继续测试。
 static void require(bool ok, const char* message)
 {
     if (!ok) { std::cerr << "FAIL " << message << '\n'; std::exit(1); }
 }
+// 以下程序用于检查A的数据与账号、判题接口能否配合
+// argc和argv接收g++.exe绝对路径，以及可选的样例根目录。
+// 逻辑：导入真实题包，运行七次判题并核对结果，再检查两用户进度和题包恢复。
+// 全部通过返回0；失败时输出原因并非零退出。
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
     require(argc==2 || argc==3,"pass g++.exe absolute path and optional sample root");
     QTemporaryDir temp;
     require(temp.isValid(),"temporary data");
-    const std::string root=argc==3 ? argv[2] : CODEVAULT_SOURCE_ROOT; // 发布验证可显式改用包内样例。
+    const std::string root=argc==3 ? argv[2] : CODEVAULT_SOURCE_ROOT;
     const std::string data=temp.path().toUtf8().toStdString();
     std::string error;
     ProblemLibrary library(data+"/packages");
@@ -45,6 +52,7 @@ int main(int argc, char** argv)
     require(accounts.login("bob","integration-test",bobId,error),"Bob login"); accounts.logout();
     require(aliceId!=bobId && aliceId!="practice" && bobId!="practice","independent stable IDs");
     JudgeEngine engine(argv[1]);
+    // 依次检查AC、第三点WA、CE、RE、TLE、输出超限，最后再跑AC
     const char* sources[]={"answer_multi_ac.cpp","answer_wa_at3.cpp","answer_ce.cpp","answer_re.cpp",
         "answer_tle.cpp","answer_output_limit.cpp","answer_multi_ac.cpp"};
     const char* statuses[]={"AC","WA","CE","RE","TLE","OutputLimit","AC"};
@@ -57,6 +65,7 @@ int main(int argc, char** argv)
         require(engine.startJudge(problem,source,tests,error),error.c_str());
         if (finished.count()==0) require(finished.wait(35000),"judge completion timeout");
         QCoreApplication::processEvents();
+        // 完成通知只能有一次，任务结束后引擎应恢复空闲
         require(finished.count()==1 && !engine.isBusy(),"one completion and engine idle");
         const JudgeResult result=engine.getResult();
         std::cout << sources[i] << ": " << result.status << ' ' << result.passedCount << '/'
@@ -66,6 +75,7 @@ int main(int argc, char** argv)
         require(result.pointResults.size()==5,"all point results present");
         for (int j=executed[i];j<5;++j)
             require(!result.pointResults[j].executed && result.pointResults[j].status=="NotRun","unexecuted points");
+        // 只有第三点WA保存给bob，其他结果保存给alice
         Progress progress; progress.userId=i==1 ? bobId : aliceId;
         progress.packageId=problem.packageId; progress.problemId=problem.problemId; progress.sourcePath=source;
         progress.status=result.status=="AC" ? 2 : 1; progress.lastSummary=result.status;

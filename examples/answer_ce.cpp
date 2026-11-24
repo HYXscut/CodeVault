@@ -1,13 +1,16 @@
-#include <iostream> 
+#include <iostream>
 
+// 以下程序用于检查编译错误CE
+// main没有参数。
+// 逻辑：输出语句故意缺少分号，预期无法编译，不会执行main。
 int main()
 {
-    // 本文件故意制造编译错误，用于检查判题器是否返回 CE。
-    long long a = 0; // 第一个输入整数
-    long long b = 0; // 第二个输入整数
 
-    std::cin >> a >> b; // 读取 P001 的两个整数
-    std::cout << a + b << '\n' // 故意漏写分号，编译器应在这里报语法错误
+    long long a = 0;
+    long long b = 0;
+
+    std::cin >> a >> b;
+    std::cout << a + b << '\n' // 故意漏写分号，保留这个错误
 
     return 0;
 }

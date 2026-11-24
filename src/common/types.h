@@ -2,6 +2,7 @@
 #define CODEJUDGE_TYPES_H
 #include<vector>
 #include<string>
+// 题目信息，只保存数据。
 struct Problem {
 	std::string packageId;//题包编号
 	std::string problemId;//题包内题目编号
@@ -18,11 +19,11 @@ struct CompilerInfo
     std::string version; // 成功时的实际版本文字
     std::string error;   // 失败时的原因
 };
-struct TestCase{
-	//作为测试点的数据载体
-	int index=0;//测试点编号，0表示尚未填入数据，1表示本周成功读取
-	std::string input;//从1.in读取的完整内容，保留空格和末尾换行
-	std::string expectedOutput;//从1.out读取的完整标准输出，保留空格和换行
+// 一个测试点的输入和标准输出，只保存数据。
+struct TestCase {
+    int index = 0; // 测试点编号从1开始，0表示尚未填入数据
+    std::string input; // 对应编号.in文件的完整内容，保留空格和换行
+    std::string expectedOutput; // 对应编号.out文件的完整内容，保留空格和换行
 };
 struct TestPointResult {
 	int index = 0;
@@ -50,26 +51,29 @@ struct JudgeResult{
 	int totalCount = 0;
 	std::vector<TestPointResult> pointResults;
 };
-constexpr int ProgressNotStarted = 0; // 未开始。
-constexpr int ProgressInProgress = 1; // 练习中。
-constexpr int ProgressLocalAccepted = 2; // 本地通过。
+const int ProgressNotStarted = 0; // 未开始。
+const int ProgressInProgress = 1; // 练习中。
+const int ProgressLocalAccepted = 2; // 本地通过。
 
-struct Progress // 保存一个用户对一道题的最近练习记录。
+// 一个用户对一道题的最近练习记录，只保存数据，没有继承关系。
+struct Progress
 {
     std::string userId; // 用户编号
     std::string packageId; // 题包编号
     std::string problemId; // 题目编号
-    std::string sourcePath; // 用户原始源码路径，未绑定时为空。
+    std::string sourcePath; // 原始源码路径，未绑定时为空
     int status = ProgressNotStarted; // 默认未开始
-    std::string lastSummary; // 最近判题的单行短摘要
+    std::string lastSummary; // 最近判题的单行摘要
     std::string lastOpenedTime; // 最近打开时间，尚未记录时为空
-    std::string lastJudgedTime; // 最近有效判题时间，尚未判题时为空
+    std::string lastJudgedTime; // 最近判题时间，尚未记录时为空
 };
-struct ProblemQuery // 查询条件；空文本不限，status 为 -1 时不限状态。
+
+// 题目筛选条件，只保存数据，没有继承关系。
+struct ProblemQuery
 {
-    std::string titleKeyword;
-    std::string tag;
-    std::string packageId;
-    int status = -1;
+    std::string titleKeyword; // 标题包含的文字，区分大小写，空串表示不限
+    std::string tag; // 精确匹配的标签，空串表示不限
+    std::string packageId; // 题包编号，空串表示不限
+    int status = -1; // 进度状态，-1表示不限
 };
 #endif
