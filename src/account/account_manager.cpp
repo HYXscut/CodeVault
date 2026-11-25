@@ -19,35 +19,73 @@ bool AccountManager::load(std::string& error)
     // 清空当前已经加载的账号
     accounts_.clear();
 
-    // 打开账号文件
-    std::ifstream input(filePath_);
-
-    // 判断账号文件是否打开失败
-    if (!input)
+    try
     {
-        // 创建账号文件所在目录
-        const std::filesystem::path filePath(filePath_);
-        std::error_code directoryError;
-        std::filesystem::create_directories(filePath.parent_path(), directoryError);
+        const std::filesystem::path filePath = std::filesystem::u8path(filePath_);
 
-        // 判断账号目录创建是否失败
-        if (directoryError)
+        // 打开账号文件
+        std::ifstream input(filePath);
+
+        // 判断账号文件是否打开失败
+        if (!input)
         {
-            error = "无法创建账号文件目录";
-            loaded_ = false;
-            return false;
+            // 创建账号文件所在目录
+            std::error_code directoryError;
+            std::filesystem::create_directories(filePath.parent_path(), directoryError);
+
+            // 判断账号目录创建是否失败
+            if (directoryError)
+            {
+                error = "无法创建账号文件目录";
+                loaded_ = false;
+                return false;
+            }
+
+            // 尝试创建空的账号文件
+            std::ofstream createFile(filePath);
+
+            // 判断账号文件是否创建失败
+            if (!createFile)
+            {
+                error = "无法创建账号文件";
+
+                loaded_ = false;
+
+                return false;
+            }
+
+            // 标记账号文件加载成功
+            loaded_ = true;
+
+            // 清空旧错误
+            error.clear();
+
+            return true;
         }
 
-        // 尝试创建空的账号文件
-        std::ofstream createFile(filePath_);
+        // 保存当前读取到的用户名
+        std::string userId;
 
-        // 判断账号文件是否创建失败
-        if (!createFile)
+        // 保存当前读取到的密码
+        std::string password;
+
+        // 循环读取账号文件中的每一行账号
+        while (input >> userId >> password)
         {
-            error = "无法创建账号文件";
+            // 将当前账号加入内存列表
+            accounts_.push_back({userId, password});
+        }
 
+        // 判断文件读取过程中是否发生底层错误
+        if (input.bad())
+        {
+            // 写入读取失败原因
+            error = "读取账号文件失败";
+
+            // 标记账号文件加载失败
             loaded_ = false;
 
+            // 返回加载失败
             return false;
         }
 
@@ -57,43 +95,15 @@ bool AccountManager::load(std::string& error)
         // 清空旧错误
         error.clear();
 
+        // 返回加载成功
         return true;
     }
-
-    // 保存当前读取到的用户名
-    std::string userId;
-
-    // 保存当前读取到的密码
-    std::string password;
-
-    // 循环读取账号文件中的每一行账号
-    while (input >> userId >> password)
+    catch (const std::exception& ex)
     {
-        // 将当前账号加入内存列表
-        accounts_.push_back({userId, password});
-    }
-
-    // 判断文件读取过程中是否发生底层错误
-    if (input.bad())
-    {
-        // 写入读取失败原因
-        error = "读取账号文件失败";
-
-        // 标记账号文件加载失败
+        error = ex.what();
         loaded_ = false;
-
-        // 返回加载失败
         return false;
     }
-
-    // 标记账号文件加载成功
-    loaded_ = true;
-
-    // 清空旧错误
-    error.clear();
-
-    // 返回加载成功
-    return true;
 }
 
 // 注册新账号
@@ -242,39 +252,49 @@ void AccountManager::logout()
 // 实现步骤：1. 以覆盖模式打开文件 2. 遍历 accounts_ 逐行写入用户名和密码 3. 检查写入流状态
 bool AccountManager::save(std::string& error)
 {
-    // 打开账号文件进行覆盖写入
-    std::ofstream output(filePath_);
-
-    // 判断账号文件是否打开失败
-    if (!output)
+    try
     {
-        // 写入账号文件打开失败原因
-        error = "无法写入账号文件";
+        const std::filesystem::path filePath = std::filesystem::u8path(filePath_);
 
-        // 返回保存失败
+        // 打开账号文件进行覆盖写入
+        std::ofstream output(filePath);
+
+        // 判断账号文件是否打开失败
+        if (!output)
+        {
+            // 写入账号文件打开失败原因
+            error = "无法写入账号文件";
+
+            // 返回保存失败
+            return false;
+        }
+
+        // 遍历内存中的全部账号
+        for (const auto& account : accounts_)
+        {
+            // 将用户名和密码写入文件
+            output << account.first<< ' '<< account.second<< '\n';
+        }
+
+        // 判断写入过程中是否发生错误
+        if (!output)
+        {
+            // 写入保存失败原因
+            error = "保存账号文件失败";
+
+            // 返回保存失败
+            return false;
+        }
+
+        // 清空旧错误
+        error.clear();
+
+        // 返回保存成功
+        return true;
+    }
+    catch (const std::exception& ex)
+    {
+        error = ex.what();
         return false;
     }
-
-    // 遍历内存中的全部账号
-    for (const auto& account : accounts_)
-    {
-        // 将用户名和密码写入文件
-        output << account.first<< ' '<< account.second<< '\n';
-    }
-
-    // 判断写入过程中是否发生错误
-    if (!output)
-    {
-        // 写入保存失败原因
-        error = "保存账号文件失败";
-
-        // 返回保存失败
-        return false;
-    }
-
-    // 清空旧错误
-    error.clear();
-
-    // 返回保存成功
-    return true;
 }
